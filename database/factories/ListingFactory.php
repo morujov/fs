@@ -5,6 +5,8 @@ namespace Database\Factories;
 use App\Models\Operator;
 use App\Models\Province;
 use App\Models\User;
+use App\Services\Search\NumberingPlan;
+use App\Services\Search\NumberPatternQuery;
 use App\Services\Search\PatternTagger;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -12,7 +14,8 @@ use Illuminate\Support\Str;
 /**
  * @extends Factory<\App\Models\Listing>
  *
- * Генерирует валидные испанские мобильные (6xx/7xx, 9 цифр).
+ * Генерирует продаваемые номера, спрашивая план нумерации
+ * (таблица numbering_ranges) — а не зашивая «6 или 7» в код.
  *
  * Важно: обычные номера намеренно делаются «скучными», а красивые
  * добавляются отдельными state'ами. Если сеять только случайные цифры,
@@ -56,10 +59,31 @@ class ListingFactory extends Factory
         ];
     }
 
-    /** Обычный номер: 6/7 + 8 случайных цифр. */
+    /**
+     * Продаваемый префикс, взятый из плана нумерации (таблица numbering_ranges).
+     *
+     * Фабрика намеренно НЕ знает, что мобильные начинаются на 6 и 7: она
+     * спрашивает план. Следствие — когда CNMC откроет новый диапазон и его
+     * добавят строкой в БД, демо-данные подхватят его сами, без правки кода.
+     *
+     * Раньше здесь было `randomElement(['6','7']) . numerify('########')`,
+     * и в 5% случаев выпадал 70X — numeración personal, которую собственный
+     * блок-лист и конвейер модерации отвергают. Демо-данные противоречили
+     * собственным правилам.
+     */
+    private function sellablePrefix(): array
+    {
+        $prefixes = app(NumberingPlan::class)->sellablePrefixes();
+
+        return $this->faker->randomElement($prefixes);
+    }
+
+    /** Обычный номер: продаваемый префикс + добивка случайными цифрами. */
     private function randomMsisdn(): string
     {
-        return $this->faker->randomElement(['6', '7']).$this->faker->numerify('########');
+        ['prefix' => $p, 'length' => $len] = $this->sellablePrefix();
+
+        return $p.$this->faker->numerify(str_repeat('#', $len - strlen($p)));
     }
 
     // ---- Состояния для «красивых» номеров: нужны, чтобы было что искать ----
@@ -95,51 +119,97 @@ class ListingFactory extends Factory
     }
 
     /**
-     * Все девять цифр одинаковы — по строгому правилу PatternTagger это
-     * ровно два валидных номера (6 и 7), больше «repetido» не существует.
+     * Все девять цифр одинаковы. Таких номеров крайне мало: при нынешнем
+     * плане продаваемы ровно два — 666666666 и 777777777. Изначально сидер
+     * просил пятнадцать, чего физически не существует, и упирался в
+     * active_msisdn UNIQUE. Сколько их — решает план, а не эта константа.
      */
     public function genRepetido(): string
     {
-        return str_repeat((string) $this->faker->randomElement([6, 7]), 9);
+        $plan = app(NumberingPlan::class);
+
+        // Кандидаты строим из плана, а не из зашитых [6,7]: если откроют
+        // новый диапазон, «репетидо» в нём появится сам.
+        $candidates = [];
+        foreach (range(0, 9) as $d) {
+            $n = str_repeat((string) $d, NumberPatternQuery::LENGTH);
+            if ($plan->isSellable($n)) {
+                $candidates[] = $n;
+            }
+        }
+
+        return $this->faker->randomElement($candidates);
     }
 
-    /** Палиндром: 6/7 + 3 цифры + средняя + зеркало. ~20 000 вариантов. */
+    /** Палиндром: 4 цифры + средняя + зеркало. ~20 000 вариантов. */
     public function genCapicua(): string
     {
-        $head = $this->faker->randomElement(['6', '7']).$this->faker->numerify('###');
-        $mid  = (string) $this->faker->numberBetween(0, 9);
+        return $this->generateSellable(function () {
+            $head = $this->faker->numerify('####');
+            $mid  = (string) $this->faker->numberBetween(0, 9);
 
-        return $head.$mid.strrev($head);
+            return $head.$mid.strrev($head);
+        });
     }
 
     /**
      * Лестница: гарантированный подряд-возрастающий прогон длиной 6 (порог
-     * тега — 6, см. PatternTagger::isEscalera), поставленный со сдвигом в
-     * хвост из 8 цифр, остальное — случайные цифры. Прежний вариант давал
-     * всего 4 разных номера и не набирал 10 уникальных активных строк.
+     * тега — 6, см. PatternTagger::isEscalera) со сдвигом внутри номера,
+     * остальные позиции — случайные цифры. Первая цифра оставлена случайной
+     * и отбраковывается планом: так генератор не знает про диапазоны.
      */
     public function genEscalera(): string
     {
-        $prefix = $this->faker->randomElement(['6', '7']);
-        $start  = $this->faker->numberBetween(0, 4);  // start..start+5 влезает в 0..9
-        $offset = $this->faker->numberBetween(0, 2);  // прогон длиной 6 внутри 8 цифр
+        return $this->generateSellable(function () {
+            $start  = $this->faker->numberBetween(0, 4);  // start..start+5 влезает в 0..9
+            $offset = $this->faker->numberBetween(1, 3);  // прогон длиной 6 внутри 9 цифр
 
-        $tail = [];
-        for ($i = 0; $i < 8; $i++) {
-            $tail[] = ($i >= $offset && $i < $offset + 6)
-                ? (string) ($start + ($i - $offset))
-                : (string) $this->faker->numberBetween(0, 9);
-        }
+            $d = [];
+            for ($i = 0; $i < 9; $i++) {
+                $d[] = ($i >= $offset && $i < $offset + 6)
+                    ? (string) ($start + ($i - $offset))
+                    : (string) $this->faker->numberBetween(0, 9);
+            }
 
-        return $prefix.implode('', $tail);
+            return implode('', $d);
+        });
     }
 
     /** Хвост из четырёх одинаковых: 61234 7777. ~200 000 вариантов. */
     public function genTerminacion(): string
     {
-        return $this->faker->randomElement(['6', '7'])
-            .$this->faker->numerify('####')
-            .str_repeat((string) $this->faker->numberBetween(0, 9), 4);
+        return $this->generateSellable(fn () => $this->faker->numerify('#####')
+            .str_repeat((string) $this->faker->numberBetween(0, 9), 4));
+    }
+
+    /**
+     * Генератор предлагает — план решает.
+     *
+     * «Красивые» паттерны имеют структуру (палиндром, лестница), которая
+     * задаёт первые цифры и может не попасть в продаваемый диапазон.
+     * Городить условия внутри каждого генератора — значит вшить туда знание
+     * о плане нумерации, которое мы только что оттуда убрали. Проще
+     * перевыбрать: отбраковка редкая, цикл сходится.
+     *
+     * Лимит защищает от вечного цикла, если план запретит всё: молча
+     * крутиться вечно хуже, чем упасть с внятным сообщением.
+     */
+    private function generateSellable(callable $gen, int $maxTries = 500): string
+    {
+        $plan = app(NumberingPlan::class);
+
+        for ($i = 0; $i < $maxTries; $i++) {
+            $n = $gen();
+
+            if ($plan->isSellable($n)) {
+                return $n;
+            }
+        }
+
+        throw new \RuntimeException(
+            'Не удалось сгенерировать продаваемый номер за '.$maxTries.' попыток. '
+            .'Похоже, numbering_ranges запрещает всё — проверь NumberingRangeSeeder.'
+        );
     }
 
     /** Общий помощник: подставить номер и пересчитать теги и slug. */

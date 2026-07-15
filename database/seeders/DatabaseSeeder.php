@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
     {
         // Справочники — всегда, включая прод.
         $this->call([
+            NumberingRangeSeeder::class,
             ProvinceSeeder::class,
             OperatorSeeder::class,
             BlocklistSeeder::class,

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Search\NumberPatternQuery;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -107,27 +108,23 @@ class Listing extends Model
      * Wildcard-поиск по номеру.
      *
      * Пользовательский синтаксис: цифры и '?' (одна любая цифра).
-     * Пустые позиции добиваются справа до 9 символов.
+     * '6??12??34' → LIKE '6__12__34'.
      *
-     * БЕЗОПАСНОСТЬ: '%' и '_' обязаны быть вырезаны ДО построения LIKE.
-     * Если пользователь введёт '%', он получит выгрузку всей базы одним
-     * запросом — это дыра, а не косметика. Санитизация здесь намеренно
-     * продублирована с FormRequest: правило валидации можно однажды забыть
-     * подключить, а этот метод вызывается всегда.
+     * Санитизация делегирована NumberPatternQuery и НЕ дублируется здесь.
+     * Раньше эти строки были скопированы в оба места «для надёжности» — но
+     * два экземпляра защиты от '%' означают ровно одно: однажды поправят
+     * один и забудут другой, а цена ошибки — выгрузка всей базы контактов
+     * одним запросом. Один источник правды, покрытый тестами.
      */
     public function scopeMatchingPattern(Builder $q, ?string $pattern): Builder
     {
-        $clean = preg_replace('/[^0-9?]/', '', (string) $pattern);
+        $like = NumberPatternQuery::toLike($pattern);
 
-        if ($clean === '') {
+        // null = искать не по чему. Не фильтруем, но и не подставляем
+        // шаблон «на всё»: решение показывать всё принимает вызывающий.
+        if ($like === null) {
             return $q;
         }
-
-        $clean = substr($clean, 0, 9);
-        $clean = str_pad($clean, 9, '?');
-
-        // '?' → '_' (ровно один символ в LIKE).
-        $like = strtr($clean, ['?' => '_']);
 
         return $q->where('msisdn', 'LIKE', $like);
     }

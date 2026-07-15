@@ -27,10 +27,17 @@ final class PatternTagger
         'facil',         // легко запомнить (эвристика)
     ];
 
-    /** @return list<string> */
+    /**
+     * @return list<string>
+     *
+     * Проверка структурная, а не «продаётся ли номер»: красота числа не
+     * зависит от того, выделил ли CNMC этот диапазон. Если завтра откроют
+     * 75X — палиндромы в нём останутся палиндромами, и трогать этот класс
+     * не придётся.
+     */
     public static function tag(string $msisdn): array
     {
-        if (! NumberPatternQuery::isValidMsisdn($msisdn)) {
+        if (! NumberPatternQuery::isWellFormed($msisdn)) {
             return [];
         }
 

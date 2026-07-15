@@ -21,13 +21,38 @@
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <!-- <env name="DB_CONNECTION" value="sqlite"/> -->
-        <!-- <env name="DB_DATABASE" value=":memory:"/> -->
+
+        <!--
+            MySQL, а не SQLite.
+
+            Схема listings опирается на генерируемую колонку
+              active_msisdn ... GENERATED ALWAYS AS (IF(status='active', msisdn, NULL)) STORED
+            плюс UNIQUE по ней. Это MySQL-синтаксис: IF() в SQLite нет, и
+            миграция там просто не пройдёт. Гонять тесты на SQLite означало бы
+            тестировать не ту схему, которая поедет в прод, а именно на этой
+            колонке держится «один активный номер — одно объявление».
+
+            Нужна отдельная база:
+              mysql -u root -h 127.0.0.1 -e "CREATE DATABASE numeros_es_testing
+                CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+            Юнит-тесты (tests/Unit) наследуют PHPUnit\TestCase, БД не трогают
+            и остаются мгновенными — MySQL нужен только для Feature.
+        -->
+        <env name="DB_CONNECTION" value="mysql"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_DATABASE" value="numeros_es_testing"/>
+        <env name="DB_USERNAME" value="root"/>
+        <env name="DB_PASSWORD" value=""/>
+        <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
-        <env name="PULSE_ENABLED" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
+        <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false"/>
     </php>
 </phpunit>

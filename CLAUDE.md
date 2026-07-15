@@ -12,28 +12,54 @@
 
 ## Состояние
 
-Готовы S0 и S1: скелет, схема, модели, сидеры, ядро wildcard-поиска.
-Три коммита. Дальше по плану S2 (Google Sign-In + подача объявления + OTP).
+S0 и S1 готовы и проверены на живой машине: Laravel 13.20.0,
+`migrate:fresh --seed` и тесты зелёные, ~487 демо-объявлений.
+Дальше по плану S2 (Google Sign-In + подача объявления + OTP).
 
-**Важно:** весь код написан без единого запуска — в окружении, где его писали,
-не было PHP. Он не проверен ничем, кроме портирования логики поиска на JS.
-Первый `composer install && php artisan migrate --seed` вполне может упасть.
-Это ожидаемо. Чини и иди дальше.
+**Важно про происхождение кода.** Он пишется в окружении, где нет PHP, и
+проверяется уже здесь. Поэтому свежие правки могут падать на первом прогоне —
+это ожидаемо, чини и иди дальше. Найденные так баги стоит понимать как класс,
+а не как случайность: сидер просил 15 «репетидо», которых существует ровно 2;
+валидатор пропускал 70X, которые сам же блок-лист запрещал; тесты гонялись на
+SQLite, где миграция физически не проходит. Общее у них одно — правило и данные
+жили в разных местах и разошлись.
 
 ## Стек и версии
 
 | | Локально | Bluehost (прод) |
 |---|---|---|
-| PHP | **8.3** — обязательно | 8.3.32 |
+| **Laravel** | **13.x** | 13.x |
+| PHP | **8.3** | 8.3.32 |
 | MySQL | 8.0 | **5.7.44** |
 | Composer | 2.x | `/opt/cpanel/composer/bin/composer` |
 | Node | есть | **нет** — ассеты собираются локально |
 
-**PHP 8.5 не подходит.** Laravel 11 вышел в марте 2024 и с ним не тестировался.
-На машине может стоять Homebrew-PHP 8.5 — его нужно отлинковать.
+**Laravel 13, не 11.** Проект начинался на 11 — это была ошибка: security-поддержка
+Laravel 11 закончилась 12 марта 2026. Composer 2.10 правильно отказывался его ставить
+через advisory-блок. Если увидишь `policy.advisories.block false` в глобальном конфиге
+Composer — это обход той ошибки, его нужно **откатить**:
+
+```bash
+composer config --global --unset policy.advisories.block
+```
+
+Laravel 13: PHP 8.3+, багфиксы до Q3 2027, безопасность до Q1 2028.
+
+**PHP строго 8.3.** На машине есть Homebrew-PHP 8.5 — он должен быть отлинкован.
+Прод на 8.3.32, расхождение версий нам не нужно.
 
 **MySQL: прод на 5.7.** Ничего из MySQL 8: ни оконных функций, ни `CHECK`,
 ни `SKIP LOCKED`. `JSON` и generated-колонки в 5.7 есть, их используем.
+
+**Laravel 13 — что важно помнить:**
+- CSRF-мидлвара переименована: `VerifyCsrfToken` → `PreventRequestForgery`,
+  плюс проверка `Sec-Fetch-Site`. Пригодится на AJAX-эндпоинте раскрытия контактов (S4).
+- `config/cache.php` → `serializable_classes => false`. Мы кэшируем только скаляры
+  (`Setting::get`), так что менять нечего. Не ослаблять без причины.
+- Tailwind 4: `tailwind.config.js` и `postcss.config.js` больше не используются,
+  конфиг через `@tailwindcss/vite`.
+- `symfony/polyfill-php85` определяет глобальные `array_first()`/`array_last()`.
+  Использовать `Arr::first()`/`Arr::last()`, а не глобальные функции.
 
 ## Инварианты — не ломать
 
@@ -44,8 +70,12 @@
    уходит только из AJAX-эндпоинта после проверки сессии.
    Рендерить полное значение и прятать `blur`/`opacity` — вскрывается Ctrl+U.
 3. **`%` и `_` от пользователя вырезаются до построения LIKE.**
-   Вся санитизация в `App\Services\Search\NumberPatternQuery` — whitelist `[0-9?]`.
-   Один пропущенный `%` выгружает всю базу контактов одним запросом.
+   Вся санитизация в `App\Services\Search\NumberPatternQuery` — whitelist `[0-9?]`,
+   **в одном месте**. Не копируй её в скоупы и FormRequest'ы «для надёжности»:
+   два экземпляра защиты означают, что однажды поправят один и забудут второй.
+   Покрыто `tests/Unit/NumberPatternQueryTest.php` — если правишь этот класс,
+   тест обязан остаться зелёным.
+
 4. **Гейт только на раскрытии контакта.** Поиск, фильтры, листинг, карточка,
    цена — открыты анониму и Googlebot. Загейтить просмотр = убить SEO = убить проект.
 5. **Авторизация только Google OAuth.** Паролей нет: ни колонки `password`,
@@ -60,16 +90,55 @@
    Пороги, TTL, лимиты, фича-флаги правятся из админки. На shared-хостинге
    деплой это ручной `git pull` в рвущемся терминале — туда за сменой цифры
    никто не полезет. В `config/numeros.php` только неизменяемые константы.
+9. **План нумерации — в БД, а не в коде.**
+   Какие префиксы мобильные и продаются — в таблице `numbering_ranges`,
+   читается через `App\Services\Search\NumberingPlan`. Матчинг по самому
+   длинному префиксу: `70` перебивает `7`. Новый диапазон = одна строка,
+   без деплоя. **Не возвращай в код регулярку вида `^[67]\d{8}$`** — CNMC
+   двигает диапазоны без нас (6XX открыли, когда кончился 9XX; 71–74 в 2010;
+   75–79 ждут очереди), а деплой здесь — ручной `git pull` в рвущемся терминале.
+
+   Разделение обязательно: `NumberPatternQuery` — синтаксис (чистый, без БД,
+   мгновенные юнит-тесты защиты от `%`). `NumberingPlan` — политика (БД + кэш,
+   fail-closed). Смешать их значит утащить БД в тесты санитизации.
 
 ## Ключевые места
 
 ```
-app/Services/Search/NumberPatternQuery.php  ← ядро поиска, вся санитизация
+app/Services/Search/NumberPatternQuery.php  ← синтаксис: санитизация, LIKE. Чистый, без БД
+app/Services/Search/NumberingPlan.php       ← политика: план нумерации из БД + кэш
 app/Services/Search/PatternTagger.php       ← repetido/capicua/escalera
 app/Models/Listing.php                      ← маскировка контактов
-config/numeros.php                          ← константы
+config/numeros.php                          ← только неизменяемые константы
+database/migrations/..._create_numbering_ranges_table.php
 database/migrations/..._create_listings_table.php
 ```
+
+## Тесты
+
+```bash
+# Нужна отдельная база — Feature-тесты идут на MySQL, не на SQLite
+mysql -u root -h 127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS numeros_es_testing
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+php artisan test
+```
+
+**Почему MySQL, а не SQLite.** Схема `listings` держится на генерируемой
+колонке `active_msisdn ... GENERATED ALWAYS AS (IF(...))` — это MySQL-синтаксис,
+`IF()` в SQLite нет, миграция там не пройдёт. Раньше в `phpunit.xml` стоял
+SQLite и это не всплывало: единственный feature-тест был «главная отдаёт 200»,
+БД он не трогал, и миграции под SQLite ни разу не запускались.
+
+Что покрыто:
+
+| Файл | Что защищает |
+|---|---|
+| `Unit/NumberPatternQueryTest` | **Санитизация LIKE.** Один пропущенный `%` = выгрузка всей базы контактов |
+| `Unit/PatternTaggerTest` | Теги = навигация и SEO-посадочные |
+| `Unit/ListingMaskingTest` | Полный контакт не утекает в HTML; `msisdn` не маскируется |
+| `Feature/NumberingPlanTest` | Новый диапазон работает строкой в БД, без правки кода |
+| `Feature/ListingUniquenessTest` | «Один номер — одно активное объявление» на уровне БД |
 
 ### Антидубль — почему так
 
@@ -99,62 +168,71 @@ NULL-ы в UNIQUE не конфликтуют → «один активный н
 
 ---
 
-## Задача сейчас: поднять окружение
+## Задача сейчас: прогнать план нумерации и новые тесты
+
+Ветка `upgrade-laravel-13`. Апгрейд уже выполнен и проверен (Laravel 13.20.0,
+`migrate:fresh --seed` и тесты зелёные). Сверху добавлено то, что нельзя было
+проверить без PHP.
+
+**Что добавлено:**
+- `numbering_ranges` — план нумерации данными. Матчинг по самому длинному
+  префиксу, `70` перебивает `7`. Модель, сервис `NumberingPlan`, сидер.
+- `NumberPatternQuery` очищен от политики: `isValidMsisdn` убран, вместо него
+  `isWellFormed` (структура). Регулярка `^[67]\d{8}$` пропускала 70X.
+- `ListingFactory` спрашивает план вместо зашитых `['6','7']`. Раньше ~5%
+  демо-объявлений были 70X, противоречащими собственному блок-листу.
+- `BlocklistSeeder` опустошён: `70`/`8`/`9`/`900`/`902` уехали в план,
+  а `666666666` и `612345678` были выдуманными записями, конфликтовавшими
+  с фабрикой.
+- `Listing::scopeMatchingPattern` больше не дублирует санитизацию — делегирует.
+- `phpunit.xml`: SQLite → MySQL, иначе миграция с `IF()` не проходит.
+- 5 тестовых файлов вместо `assertTrue(true)`.
+
+**Выполнить:**
 
 ```bash
-# ВАЖНО: brew спрашивает подтверждение. Без NONINTERACTIVE=1 команда
-# зависнет на промпте, а следующие строки скрипта уйдут ему в ответ.
-NONINTERACTIVE=1 brew install php@8.3 composer mysql@8.0
-
-brew unlink php 2>/dev/null
-brew link --overwrite --force php@8.3
-
-# Шелл — bash, не zsh. Правится ~/.bash_profile, не ~/.zshrc.
-echo 'export PATH="/opt/homebrew/opt/mysql@8.0/bin:$PATH"' >> ~/.bash_profile
-export PATH="/opt/homebrew/opt/mysql@8.0/bin:$PATH"
-
-brew services start mysql@8.0
-sleep 5
-
-# Проверить перед тем, как идти дальше:
-php -v          # обязан быть 8.3.x, НЕ 8.5
-composer -V
-mysql --version
-
-mysql -u root -h 127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS numeros_es CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-
 cd ~/Documents/numeros-es
-composer install
-[ -f .env ] || cp .env.example .env
-php artisan key:generate
-php artisan migrate --seed
+git checkout upgrade-laravel-13
+
+# Feature-тесты идут на MySQL
+mysql -u root -h 127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS numeros_es_testing
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+php artisan migrate:fresh --seed
+php artisan test
 ```
 
-Ожидаемо: 52 провинции, 14 операторов, ~500 объявлений.
+Ожидаемо: ~487 объявлений, 0 дублей активных msisdn, **0 объявлений с
+префиксом 70**, все тесты зелёные.
+
+Проверить отдельно — это и был баг:
 
 ```bash
-php artisan tinker --execute="echo App\Models\Listing::count();"
+php artisan tinker --execute="
+  echo 'всего: '.App\Models\Listing::count().PHP_EOL;
+  echo '70X (должно быть 0): '.App\Models\Listing::where('msisdn','LIKE','70_______')->count().PHP_EOL;
+  echo 'блок-лист (должен быть пуст): '.App\Models\BlocklistNumber::count().PHP_EOL;
+"
 ```
 
 ### Если падает
 
-- `Specified key was too long` → `Schema::defaultStringLength(191)` в `AppServiceProvider::boot()`
-- Ошибка на generated-колонке → проверь версию MySQL, нужна ≥ 5.7.6
-- `requires php ^8.2 but your php version 8.5` → `brew unlink php` не сработал
-- Фабрика падает на `Operator::inRandomOrder()->value('id')` → сидеры справочников
-  должны отработать раньше `DemoListingSeeder`; порядок задан в `DatabaseSeeder`
+- Тесты не видят БД → не создана `numeros_es_testing`
+- `IF()` / syntax error в миграции → тесты всё ещё идут на SQLite, проверь `phpunit.xml`
+- `ListingFactory` кидает RuntimeException про 500 попыток → `NumberingRangeSeeder`
+  не отработал или запретил всё; проверь порядок в `DatabaseSeeder`
+- Тесты `NumberingPlanTest` падают на кэше → `NumberingPlan::flush()` не вызван;
+  в тестах для этого есть `fresh()`
 
-### Когда заработает
-
-```bash
-git push -u origin main    # remote уже настроен на github.com/morujov/fs
-```
-
-Затем сообщи, что прошло и что чинил — и можно начинать S2.
+**Затем:** закоммитить, запушить, добавить в PR #2 (или отдельным PR, если #2 уже вмёржен).
 
 ## Чего не делать
 
+- **Не обходи advisory-блок Composer.** Если он сработал — это сигнал, а не помеха.
+  Сообщи, что именно он говорит.
+- **Не понижай Laravel обратно на 11 или 12.** 11 без поддержки с марта 2026,
+  у 12 багфиксы кончаются 13 августа 2026.
 - Не добавляй Filament — он в S5, сейчас потянет конфликты версий.
 - Не трогай `BLUEPRINT-numeros-es.md` без явной просьбы: это источник правды
   по решениям, а не рабочий файл.
-- Не переходи к S2, пока `migrate --seed` не пройдёт чисто.
+- Не переходи к S2, пока `migrate:fresh --seed` и `php artisan test` не пройдут чисто.

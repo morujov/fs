@@ -32,10 +32,14 @@ use InvalidArgumentException;
  */
 final class NumberPatternQuery
 {
+    /**
+     * Длина номера по умолчанию — для маски поиска и добивки ввода.
+     *
+     * НЕ является правилом валидации: длина конкретного диапазона живёт
+     * в таблице numbering_ranges (колонка `length`). Здесь — только то,
+     * сколько ячеек рисовать в поле поиска.
+     */
     public const LENGTH = 9;
-
-    /** Испанский мобильный начинается на 6 или 7. */
-    public const VALID_FIRST_DIGITS = ['6', '7'];
 
     /**
      * Санитизация пользовательского ввода.
@@ -85,30 +89,41 @@ final class NumberPatternQuery
         return '/^'.strtr($clean, ['?' => '\d']).'$/';
     }
 
-    /** Валиден ли номер как испанский мобильный. */
-    public static function isValidMsisdn(string $msisdn): bool
+    /**
+     * Структурная проверка: только цифры и ожидаемая длина.
+     *
+     * Это НЕ проверка «продаётся ли такой номер» — она в NumberingPlan,
+     * потому что зависит от плана нумерации CNMC и меняется без нас.
+     * Здесь сознательно ничего не знают про 6/7/70: правило формата,
+     * зашитое в код, — это релиз ради одного префикса.
+     */
+    public static function isWellFormed(string $msisdn, int $length = self::LENGTH): bool
     {
-        return (bool) preg_match('/^[67]\d{8}$/', $msisdn);
+        return (bool) preg_match('/^\d{'.$length.'}$/', $msisdn);
     }
 
     /**
-     * Нормализация введённого номера к хранимому виду.
+     * Нормализация введённого номера к хранимому виду: только цифры,
+     * без международного префикса.
+     *
      * Принимает '+34 612 34 56 78', '0034612345678', '612-34-56-78'.
-     * Бросает исключение, если номер не испанский мобильный.
+     * Бросает исключение только на структурную негодность (не 9 цифр).
+     * Продаваемость проверяет вызывающий через NumberingPlan::isSellable() —
+     * иначе нормализация начала бы зависеть от БД и утащила бы её в тесты.
      */
-    public static function normalize(string $input): string
+    public static function normalize(string $input, int $length = self::LENGTH): string
     {
         $digits = preg_replace('/\D/', '', $input) ?? '';
 
         // Отрезаем международный префикс в любой из двух записей.
         if (str_starts_with($digits, '0034')) {
             $digits = substr($digits, 4);
-        } elseif (str_starts_with($digits, '34') && strlen($digits) === 11) {
+        } elseif (str_starts_with($digits, '34') && strlen($digits) === $length + 2) {
             $digits = substr($digits, 2);
         }
 
-        if (! self::isValidMsisdn($digits)) {
-            throw new InvalidArgumentException("Not a valid Spanish mobile number: {$input}");
+        if (! self::isWellFormed($digits, $length)) {
+            throw new InvalidArgumentException("Not a well-formed Spanish number: {$input}");
         }
 
         return $digits;

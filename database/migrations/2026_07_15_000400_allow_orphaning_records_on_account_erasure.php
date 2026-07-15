@@ -27,6 +27,15 @@ use Illuminate\Support\Facades\Schema;
  *
  * NULL в UNIQUE(user_id, listing_id) на contact_reveals не конфликтует,
  * так что несколько обезличенных строк уживаются.
+ *
+ * ── И обезличивание IP ───────────────────────────────────────────────────
+ * Убрать личность — это не только отвязать user_id, но и занулить IP: он
+ * персональные данные. `contact_reveals.ip` и `reports.reporter_ip` были
+ * NOT NULL, поэтому и AccountEraser (ст. 17), и PruneOldData (ст. 5) падали
+ * бы на `Column 'ip' cannot be null` — правило (обезличиваем IP) и схема
+ * (NOT NULL) жили врозь. Делаем их nullable. NULL в UNIQUE(listing_id,
+ * reporter_ip) на reports тоже не конфликтует — антифлуд просто перестаёт
+ * действовать на давно закрытые жалобы, что и требуется.
  */
 return new class extends Migration
 {
@@ -49,13 +58,32 @@ return new class extends Migration
             $table->foreignId('user_id')->nullable()->change();
             $table->foreign('user_id')->references('id')->on('users')->nullOnDelete();
         });
+
+        // IP — персональные данные; обезличивание должно уметь их занулить.
+        // Смена nullability не требует дропать индексы (обычный на
+        // contact_reveals, UNIQUE на reports) — MySQL меняет её на месте.
+        Schema::table('contact_reveals', function (Blueprint $table) {
+            $table->string('ip', 45)->nullable()->change();
+        });
+
+        Schema::table('reports', function (Blueprint $table) {
+            $table->string('reporter_ip', 45)->nullable()->change();
+        });
     }
 
     public function down(): void
     {
         // Обратно нельзя без потери данных: осиротевшие строки некуда
-        // привязать. Если откат действительно нужен — сначала решить,
-        // что делать с ними, руками.
+        // привязать, а уже занулённые IP не вернуть в NOT NULL. Если откат
+        // действительно нужен — сначала решить, что делать с ними, руками.
+        Schema::table('reports', function (Blueprint $table) {
+            $table->string('reporter_ip', 45)->nullable(false)->change();
+        });
+
+        Schema::table('contact_reveals', function (Blueprint $table) {
+            $table->string('ip', 45)->nullable(false)->change();
+        });
+
         Schema::table('contact_reveals', function (Blueprint $table) {
             $table->dropForeign(['user_id']);
             $table->foreign('user_id')->references('id')->on('users')->cascadeOnDelete();

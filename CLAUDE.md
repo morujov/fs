@@ -66,8 +66,23 @@ Laravel 13: PHP 8.3+, багфиксы до Q3 2027, безопасность д
    уходит только из AJAX-эндпоинта после проверки сессии.
    Рендерить полное значение и прятать `blur`/`opacity` — вскрывается Ctrl+U.
 3. **`%` и `_` от пользователя вырезаются до построения LIKE.**
-   Вся санитизация в `App\Services\Search\NumberPatternQuery` — whitelist `[0-9?]`.
-   Один пропущенный `%` выгружает всю базу контактов одним запросом.
+   Вся санитизация в `App\Services\Search\NumberPatternQuery` — whitelist `[0-9?]`,
+   **в одном месте**. Не копируй её в скоупы и FormRequest'ы «для надёжности»:
+   два экземпляра защиты означают, что однажды поправят один и забудут второй.
+   Покрыто `tests/Unit/NumberPatternQueryTest.php` — если правишь этот класс,
+   тест обязан остаться зелёным.
+
+9. **План нумерации — в БД, а не в коде.**
+   Какие префиксы мобильные и продаются, живёт в таблице `numbering_ranges`
+   и читается через `App\Services\Search\NumberingPlan`. Матчинг по самому
+   длинному префиксу: `70` перебивает `7`. Новый диапазон = одна строка,
+   без деплоя. **Не возвращай регулярку вида `^[67]\d{8}$` в код** — CNMC
+   двигает диапазоны без нас, а деплой здесь это ручной `git pull` в
+   рвущемся терминале.
+
+   Разделение: `NumberPatternQuery` — синтаксис (чистый, без БД, мгновенные
+   юнит-тесты). `NumberingPlan` — политика (БД + кэш). Не смешивать: иначе
+   БД уедет в тесты санитизации.
 4. **Гейт только на раскрытии контакта.** Поиск, фильтры, листинг, карточка,
    цена — открыты анониму и Googlebot. Загейтить просмотр = убить SEO = убить проект.
 5. **Авторизация только Google OAuth.** Паролей нет: ни колонки `password`,
@@ -86,12 +101,40 @@ Laravel 13: PHP 8.3+, багфиксы до Q3 2027, безопасность д
 ## Ключевые места
 
 ```
-app/Services/Search/NumberPatternQuery.php  ← ядро поиска, вся санитизация
+app/Services/Search/NumberPatternQuery.php  ← синтаксис: санитизация, LIKE. Чистый, без БД
+app/Services/Search/NumberingPlan.php       ← политика: план нумерации из БД + кэш
 app/Services/Search/PatternTagger.php       ← repetido/capicua/escalera
 app/Models/Listing.php                      ← маскировка контактов
-config/numeros.php                          ← константы
+config/numeros.php                          ← только неизменяемые константы
+database/migrations/..._create_numbering_ranges_table.php
 database/migrations/..._create_listings_table.php
 ```
+
+## Тесты
+
+```bash
+# Нужна отдельная база — Feature-тесты идут на MySQL, не на SQLite
+mysql -u root -h 127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS numeros_es_testing
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+php artisan test
+```
+
+**Почему MySQL, а не SQLite.** Схема `listings` держится на генерируемой
+колонке `active_msisdn ... GENERATED ALWAYS AS (IF(...))` — это MySQL-синтаксис,
+`IF()` в SQLite нет, миграция там не пройдёт. Раньше в `phpunit.xml` стоял
+SQLite и это не всплывало: единственный feature-тест был «главная отдаёт 200»,
+БД он не трогал, и миграции под SQLite ни разу не запускались.
+
+Что покрыто:
+
+| Файл | Что защищает |
+|---|---|
+| `Unit/NumberPatternQueryTest` | **Санитизация LIKE.** Один пропущенный `%` = выгрузка всей базы контактов |
+| `Unit/PatternTaggerTest` | Теги = навигация и SEO-посадочные |
+| `Unit/ListingMaskingTest` | Полный контакт не утекает в HTML; `msisdn` не маскируется |
+| `Feature/NumberingPlanTest` | Новый диапазон работает строкой в БД, без правки кода |
+| `Feature/ListingUniquenessTest` | «Один номер — одно активное объявление» на уровне БД |
 
 ### Антидубль — почему так
 
@@ -121,60 +164,63 @@ NULL-ы в UNIQUE не конфликтуют → «один активный н
 
 ---
 
-## Задача сейчас: апгрейд на Laravel 13
+## Задача сейчас: прогнать план нумерации и новые тесты
 
-Ветка `upgrade-laravel-13` уже содержит файловую часть — её подготовили без
-возможности запустить composer. Осталось выполнить и проверить.
+Ветка `upgrade-laravel-13`. Апгрейд уже выполнен и проверен (Laravel 13.20.0,
+`migrate:fresh --seed` и тесты зелёные). Сверху добавлено то, что нельзя было
+проверить без PHP.
 
-**Что уже сделано в ветке:**
-- `composer.json`: `laravel/framework ^13.8`, `laravel/tinker ^3.0`,
-  `phpunit/phpunit ^12.5.12`, `php ^8.3`; убран `laravel/sail`
-- Файлы скелета (`bootstrap/`, `config/*`, `phpunit.xml`, `package.json`,
-  `vite.config.js`, `resources/`) заменены на версии из `laravel/laravel:13.x`
-- Удалены `tailwind.config.js`, `postcss.config.js` (Tailwind 4 их не использует)
-- Удалён `.github/` — это мейнтенерский CI самого laravel/laravel, не наш
-- `config/services.php`: добавлен блок `google` для Socialite
-- Проверено: `laravel/socialite ^5.x` объявляет `illuminate/contracts: ^13.0` — совместим
-
-**Наши файлы намеренно НЕ трогали** — их нельзя перезаписывать скелетом:
-`app/Models/User.php`, `database/factories/UserFactory.php`,
-`database/seeders/DatabaseSeeder.php`,
-`database/migrations/0001_01_01_000000_create_users_table.php`,
-`.env.example`, `README.md`, `config/numeros.php`.
+**Что добавлено:**
+- `numbering_ranges` — план нумерации данными. Матчинг по самому длинному
+  префиксу, `70` перебивает `7`. Модель, сервис `NumberingPlan`, сидер.
+- `NumberPatternQuery` очищен от политики: `isValidMsisdn` убран, вместо него
+  `isWellFormed` (структура). Регулярка `^[67]\d{8}$` пропускала 70X.
+- `ListingFactory` спрашивает план вместо зашитых `['6','7']`. Раньше ~5%
+  демо-объявлений были 70X, противоречащими собственному блок-листу.
+- `BlocklistSeeder` опустошён: `70`/`8`/`9`/`900`/`902` уехали в план,
+  а `666666666` и `612345678` были выдуманными записями, конфликтовавшими
+  с фабрикой.
+- `Listing::scopeMatchingPattern` больше не дублирует санитизацию — делегирует.
+- `phpunit.xml`: SQLite → MySQL, иначе миграция с `IF()` не проходит.
+- 5 тестовых файлов вместо `assertTrue(true)`.
 
 **Выполнить:**
 
 ```bash
-# 1. Откатить обход advisory-блока — он был неправильным решением.
-#    Composer говорил правду: Laravel 11 без security-поддержки.
-composer config --global --unset policy.advisories.block
-
 cd ~/Documents/numeros-es
 git checkout upgrade-laravel-13
 
-# 2. Обновить зависимости. Advisory-блок теперь ДОЛЖЕН молчать: Laravel 13
-#    поддерживается. Если он снова ругается — не обходи, разберись и сообщи.
-rm -rf vendor composer.lock
-composer install
+# Feature-тесты идут на MySQL
+mysql -u root -h 127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS numeros_es_testing
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
-# 3. Проверить
 php artisan migrate:fresh --seed
 php artisan test
-npm install && npm run build
 ```
 
-Ожидаемо: 52 провинции, 14 операторов, ~487 объявлений, 0 дублей активных msisdn.
+Ожидаемо: ~487 объявлений, 0 дублей активных msisdn, **0 объявлений с
+префиксом 70**, все тесты зелёные.
 
-**Затем:** запушить ветку и открыть PR в `main` (после того как PR #1 вмёржен).
+Проверить отдельно — это и был баг:
+
+```bash
+php artisan tinker --execute="
+  echo 'всего: '.App\Models\Listing::count().PHP_EOL;
+  echo '70X (должно быть 0): '.App\Models\Listing::where('msisdn','LIKE','70_______')->count().PHP_EOL;
+  echo 'блок-лист (должен быть пуст): '.App\Models\BlocklistNumber::count().PHP_EOL;
+"
+```
 
 ### Если падает
 
-- `Specified key was too long` → `Schema::defaultStringLength(191)` в `AppServiceProvider::boot()`
-- Ошибка на generated-колонке → нужна MySQL ≥ 5.7.6
-- `requires php ^8.3 but your php version 8.5` → `brew unlink php && brew link --overwrite --force php@8.3`
-- Socialite не резолвится → сообщи, не понижай Laravel обратно
-- Vite/Tailwind 4 ругается на конфиг → остатки Tailwind 3, проверь что
-  `tailwind.config.js` и `postcss.config.js` удалены
+- Тесты не видят БД → не создана `numeros_es_testing`
+- `IF()` / syntax error в миграции → тесты всё ещё идут на SQLite, проверь `phpunit.xml`
+- `ListingFactory` кидает RuntimeException про 500 попыток → `NumberingRangeSeeder`
+  не отработал или запретил всё; проверь порядок в `DatabaseSeeder`
+- Тесты `NumberingPlanTest` падают на кэше → `NumberingPlan::flush()` не вызван;
+  в тестах для этого есть `fresh()`
+
+**Затем:** закоммитить, запушить, добавить в PR #2 (или отдельным PR, если #2 уже вмёржен).
 
 ## Чего не делать
 

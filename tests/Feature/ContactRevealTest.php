@@ -45,6 +45,10 @@ class ContactRevealTest extends TestCase
             'contact_email'    => 'juan.martinez@gmail.com',
             'contact_whatsapp' => true,
             'slug'             => '612345678-abc',
+            // Фабрика сеет случайный contact_reveals (0..40) для реализма
+            // демо-данных. Тесты ниже считают раскрытия от нуля — пиним базу,
+            // иначе assertSame(1, ...) ловит стартовый рандом, а не инкремент.
+            'contact_reveals'  => 0,
         ]);
     }
 

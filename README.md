@@ -1,66 +1,151 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Números ES
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Доска объявлений о продаже мобильных номеров в Испании.
+Не маркетплейс: сделки идут вне сайта, деньги через площадку не проходят.
 
-## About Laravel
+Полное ТЗ и архитектурные решения — в `BLUEPRINT-numeros-es.md`.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+**Стек:** Laravel 11 · PHP 8.3 · MySQL · Blade + Alpine + Tailwind
+**Авторизация:** только Google Sign-In. Паролей в системе нет.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Запуск на Mac — по шагам
 
-## Learning Laravel
+### 1. Laravel Herd
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+Скачать [herd.laravel.com](https://herd.laravel.com), установить, запустить.
+Даёт PHP 8.3, Composer, Node и nginx одним пакетом — ставить их отдельно не нужно.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+В Herd нажать **Add path** и указать `~/Documents`.
+После этого проект автоматически откроется на `http://numeros-es.test`.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 2. DBngin — MySQL
 
-## Laravel Sponsors
+Скачать [dbngin.com](https://dbngin.com), установить.
+Create → MySQL 8 → порт `3306` → Start.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Создать базу (Herd ставит `mysql` в PATH):
 
-### Premium Partners
+```bash
+mysql -u root -h 127.0.0.1 -e "CREATE DATABASE numeros_es CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+### 3. Зависимости и конфиг
 
-## Contributing
+```bash
+cd ~/Documents/numeros-es
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+В `.env` проверить, что совпадает с DBngin:
 
-## Code of Conduct
+```
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=numeros_es
+DB_USERNAME=root
+DB_PASSWORD=
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### 4. Схема и демо-данные
 
-## Security Vulnerabilities
+```bash
+php artisan migrate --seed
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Должно появиться: 52 провинции, 14 операторов, ~500 объявлений,
+блок-лист служебных диапазонов, настройки.
 
-## License
+```bash
+php artisan tinker --execute="echo App\Models\Listing::count();"
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### 5. Фронт
+
+```bash
+npm install && npm run dev
+```
+
+Открыть `http://numeros-es.test`.
+
+> На шаге 5 витрины ещё нет — она в S4. Сейчас проверяется только то,
+> что схема разворачивается и данные сеются.
+
+---
+
+## Если что-то упало
+
+Пришлите вывод целиком — код писался без возможности его запустить
+(в окружении Claude нет PHP), поэтому ошибки на первом прогоне ожидаемы
+и чинятся быстро.
+
+**`Specified key was too long`** — MySQL 5.x с utf8mb4.
+Лечится строкой `Schema::defaultStringLength(191);` в `boot()`
+у `app/Providers/AppServiceProvider.php`.
+
+**`SQLSTATE[HY000] [2002]`** — MySQL в DBngin не запущен.
+
+**`could not find driver`** — в Herd не включено расширение `pdo_mysql`.
+
+---
+
+## Деплой на Bluehost
+
+Хост проверен 14.07.2026: PHP 8.3.32, Composer, Git 2.48, inodes без лимита.
+Node на хосте нет — ассеты собираются локально и коммитятся готовыми.
+
+```bash
+# на хосте, через cPanel → Terminal
+cd ~
+git clone <приватный-репозиторий> numeros-es
+cd numeros-es
+
+# Терминал cPanel рвёт сессию каждые несколько минут — длинную команду
+# запускаем в фоне, иначе composer умрёт на полпути.
+nohup composer install --no-dev -o > /tmp/composer.log 2>&1 &
+tail -f /tmp/composer.log
+
+php artisan migrate --force
+```
+
+Дальше — содержимое `public/` в `~/public_html/test`, пути в `index.php`
+на `../../numeros-es/`, и обязательная проверка:
+
+```bash
+curl -I https://<домен>/test/.env    # ← обязан вернуть 403 или 404
+```
+
+Если `.env` отдался — стоп, деплой переделывается. Полный чек-лист
+в блюпринте, раздел 8.
+
+---
+
+## Структура
+
+```
+app/
+├── Models/                 14 моделей
+├── Services/Search/
+│   ├── NumberPatternQuery  ← ядро wildcard-поиска, вся санитизация здесь
+│   └── PatternTagger       ← repetido / capicúa / escalera
+config/numeros.php          ← константы; всё изменяемое — в таблице settings
+database/
+├── migrations/             14 таблиц
+├── factories/              User, Listing (+ состояния под красивые номера)
+└── seeders/                провинции, операторы, блок-лист, настройки, демо
+```
+
+## Что нельзя ломать
+
+1. **Продаваемый номер (`listings.msisdn`) не маскируется никогда** — это товар,
+   витрина и весь SEO. Маскируется только контакт продавца.
+2. **Полный контакт не попадает в HTML** — ни разу, ни под каким CSS.
+   Только AJAX-ответ после проверки сессии.
+3. **`%` и `_` от пользователя вырезаются до построения LIKE.**
+   Иначе один символ `%` выгружает всю базу контактов одним запросом.
+4. **Гейт стоит только на раскрытии контакта.** Поиск, фильтры и карточки
+   открыты анониму и Googlebot.
+5. **Ничего из MySQL 8** — на проде 5.7.44.

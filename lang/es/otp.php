@@ -16,6 +16,7 @@ return [
     'resend'   => 'Reenviar código',
 
     'verified' => 'Número verificado. El anuncio pasará a revisión.',
+    'verified_and_published' => '¡Número verificado! Tu anuncio ya está publicado.',
     'resent'   => 'Te hemos enviado un código nuevo.',
 
     'attributes' => [

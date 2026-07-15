@@ -8,6 +8,7 @@ use App\Models\Listing;
 use App\Models\Operator;
 use App\Models\Province;
 use App\Models\Setting;
+use App\Services\Moderation\ModerationPipeline;
 use App\Services\Otp\OtpException;
 use App\Services\Otp\OtpService;
 use App\Services\Search\PatternTagger;
@@ -25,7 +26,10 @@ use Illuminate\View\View;
  */
 class ListingController extends Controller
 {
-    public function __construct(private readonly OtpService $otp) {}
+    public function __construct(
+        private readonly OtpService $otp,
+        private readonly ModerationPipeline $pipeline,
+    ) {}
 
     public function index(Request $request): View
     {
@@ -103,10 +107,21 @@ class ListingController extends Controller
             ]);
         });
 
-        // Если OTP выключен фича-флагом (только dev) — сразу к модерации.
-        if (! Setting::get('features.otp_enabled', true)) {
-            $listing->update(['phone_verified_at' => now()]);
+        // Конвейер прогоняем сразу, ещё до OTP. Смысл в том, чтобы продавец
+        // узнал про отказ (номер в блок-листе, цена вне диапазона) СЕЙЧАС,
+        // а не после того, как введёт код из SMS. Заставлять человека
+        // проходить верификацию ради «отклонено» — неуважение к его времени,
+        // а нам — лишние 0.05 € за SMS.
+        $verdict = $this->pipeline->run($listing);
 
+        if ($verdict->status === 'rejected') {
+            return redirect()
+                ->route('seller.listings.index')
+                ->with('error', $verdict->reason);
+        }
+
+        // Если OTP выключен фича-флагом (только dev), конвейер уже всё решил.
+        if (! Setting::get('features.otp_enabled', true)) {
             return redirect()
                 ->route('seller.listings.index')
                 ->with('status', __('listing.submitted_without_otp'));

@@ -12,35 +12,56 @@
 
 ## Запуск на Mac — по шагам
 
-### 1. Laravel Herd
+### 1. PHP 8.3, Composer, MySQL
 
-Скачать [herd.laravel.com](https://herd.laravel.com), установить, запустить.
-Даёт PHP 8.3, Composer, Node и nginx одним пакетом — ставить их отдельно не нужно.
+**Версия PHP важна.** На Bluehost стоит 8.3.32. Локально должно быть 8.3, а не
+8.4/8.5: Laravel 11 вышел в марте 2024 и с PHP 8.5 никогда не тестировался.
+Если в системе уже есть Homebrew-PHP другой версии, его нужно отлинковать —
+иначе `php` продолжит указывать на него.
 
-В Herd нажать **Add path** и указать `~/Documents`.
-После этого проект автоматически откроется на `http://numeros-es.test`.
+```bash
+brew install php@8.3 composer mysql@8.0
 
-### 2. DBngin — MySQL
+# Убрать с дороги другую версию PHP, если она была слинкована
+brew unlink php 2>/dev/null
+brew link --overwrite --force php@8.3
 
-Скачать [dbngin.com](https://dbngin.com), установить.
-Create → MySQL 8 → порт `3306` → Start.
+# mysql@8.0 — keg-only, сам в PATH не попадёт
+echo 'export PATH="/opt/homebrew/opt/mysql@8.0/bin:$PATH"' >> ~/.bash_profile
+source ~/.bash_profile
 
-Создать базу (Herd ставит `mysql` в PATH):
+brew services start mysql@8.0
+```
+
+Проверка — обе команды обязаны ответить:
+
+```bash
+php -v          # → PHP 8.3.x
+composer -V     # → Composer 2.x
+mysql --version # → 8.0.x
+```
+
+> Если `php -v` показывает не 8.3 — открыт другой шелл или PATH не перечитан.
+> У вас **bash**, а не zsh, поэтому правится `~/.bash_profile`, не `~/.zshrc`.
+
+### 2. База
 
 ```bash
 mysql -u root -h 127.0.0.1 -e "CREATE DATABASE numeros_es CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 ```
+
+У Homebrew-MySQL пароль root пустой — это совпадает с `.env.example`.
 
 ### 3. Зависимости и конфиг
 
 ```bash
 cd ~/Documents/numeros-es
 composer install
-cp .env.example .env
+cp .env.example .env     # если .env ещё нет
 php artisan key:generate
 ```
 
-В `.env` проверить, что совпадает с DBngin:
+`.env` уже настроен на MySQL:
 
 ```
 DB_HOST=127.0.0.1
@@ -63,16 +84,27 @@ php artisan migrate --seed
 php artisan tinker --execute="echo App\Models\Listing::count();"
 ```
 
-### 5. Фронт
+### 5. Запуск
 
 ```bash
-npm install && npm run dev
+php artisan serve
 ```
 
-Открыть `http://numeros-es.test`.
+Открыть `http://127.0.0.1:8000`.
 
-> На шаге 5 витрины ещё нет — она в S4. Сейчас проверяется только то,
+> Витрины ещё нет — она в S4. Сейчас проверяется только то,
 > что схема разворачивается и данные сеются.
+
+---
+
+## Git
+
+```bash
+cd ~/Documents/numeros-es
+git push -u origin main
+```
+
+Remote `origin` уже настроен на `github.com/morujov/fs`.
 
 ---
 
@@ -82,13 +114,22 @@ npm install && npm run dev
 (в окружении Claude нет PHP), поэтому ошибки на первом прогоне ожидаемы
 и чинятся быстро.
 
-**`Specified key was too long`** — MySQL 5.x с utf8mb4.
+**`composer: command not found`** / **`mysql: command not found`** — шаг 1 не выполнен
+или PATH не перечитан. `source ~/.bash_profile` или новое окно терминала.
+
+**`vendor/autoload.php: Failed to open stream`** — не выполнен `composer install`.
+
+**`Specified key was too long`** — MySQL с utf8mb4.
 Лечится строкой `Schema::defaultStringLength(191);` в `boot()`
 у `app/Providers/AppServiceProvider.php`.
 
-**`SQLSTATE[HY000] [2002]`** — MySQL в DBngin не запущен.
+**`SQLSTATE[HY000] [2002] Connection refused`** — MySQL не запущен:
+`brew services start mysql@8.0`.
 
-**`could not find driver`** — в Herd не включено расширение `pdo_mysql`.
+**`could not find driver`** — нет `pdo_mysql`. Проверить: `php -m | grep pdo_mysql`.
+
+**`requires php ^8.2 but your php version 8.5.x`** — не переключился PHP.
+`brew unlink php && brew link --overwrite --force php@8.3`.
 
 ---
 

@@ -1,8 +1,35 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use App\Console\Commands\ExpireListings;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+/*
+|--------------------------------------------------------------------------
+| Расписание
+|--------------------------------------------------------------------------
+| На Bluehost нет supervisor, поэтому очереди и расписание крутятся одним
+| системным кроном раз в минуту:
+|
+|   * * * * * cd /home4/clsthmmy/numeros-es && php artisan schedule:run
+|
+| ВАЖНО (инвариант №10): аккаунт делит процессы с cac.az — боевым сайтом
+| с платежами, который уже упирается в лимит. Крон включаем не сразу после
+| деплоя, а померив запас, и сразу смотрим, не начал ли cac.az тормозить.
+*/
+
+// Истечение объявлений. Раз в сутки ночью: TTL измеряется днями, гонять
+// это чаще незачем, а на аккаунте с исчерпанным лимитом процессов каждый
+// лишний запуск — это чужой платёжный сайт.
+Schedule::command(ExpireListings::class)
+    ->dailyAt('04:10')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Очередь. queue:work демоном на shared-хостинге нельзя — это постоянно
+// живущий процесс. --stop-when-empty отрабатывает пачку и выходит.
+Schedule::command('queue:work --stop-when-empty --tries=3 --max-time=50')
+    ->everyMinute()
+    ->withoutOverlapping();
+
+// Протухшие OTP и старые логи модерации чистить пока не нужно: объёмы
+// смешные. Когда понадобится — сюда же.

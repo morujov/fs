@@ -102,6 +102,44 @@
         <p class="mt-6 text-xs text-gray-500">{{ __('listing.legal_notice') }}</p>
     </div>
 
+    {{--
+        ЖАЛОБА. Открыта гостю намеренно.
+
+        Самая важная жалоба — «это мой номер, я его не продаю». Оставляет её
+        человек, который сюда не заходил, аккаунта не имеет и заводить не
+        станет: он узнал о нас из чужого звонка. Потребовать вход = не
+        узнать о чужом номере никогда.
+
+        Единственное исключение из гейта, и оно верное: здесь данные отдают,
+        а не забирают.
+    --}}
+    <details class="mt-4 rounded border bg-white p-4">
+        <summary class="cursor-pointer text-sm text-gray-600">{{ __('report.title') }}</summary>
+
+        <p class="mt-2 text-sm text-gray-600">{{ __('report.intro') }}</p>
+
+        <form method="POST" action="{{ route('listings.report', $listing) }}" class="mt-3 space-y-2">
+            @csrf
+
+            <select name="reason" class="w-full rounded border p-2">
+                @foreach (['not_mine', 'fraud', 'wrong_info', 'spam', 'sold', 'other'] as $reason)
+                    <option value="{{ $reason }}">{{ __('report.reasons.'.$reason) }}</option>
+                @endforeach
+            </select>
+            @error('reason') <p class="text-sm text-red-700">{{ $message }}</p> @enderror
+
+            <textarea name="comment" rows="3" class="w-full rounded border p-2"
+                      placeholder="{{ __('report.comment_help') }}">{{ old('comment') }}</textarea>
+            @error('comment') <p class="text-sm text-red-700">{{ $message }}</p> @enderror
+
+            <input type="email" name="reporter_email" value="{{ old('reporter_email') }}"
+                   class="w-full rounded border p-2" placeholder="{{ __('report.email_help') }}">
+            @error('reporter_email') <p class="text-sm text-red-700">{{ $message }}</p> @enderror
+
+            <button type="submit" class="rounded border px-3 py-1 text-sm">{{ __('report.submit') }}</button>
+        </form>
+    </details>
+
     @auth
         @push('scripts')
         <script>

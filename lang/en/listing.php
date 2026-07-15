@@ -11,6 +11,15 @@ return [
 
     'submitted_without_otp' => 'Listing created. It will go to review.',
 
+    'marked_sold' => 'Marked as sold. The number is now free.',
+    'archived'    => 'Listing withdrawn.',
+    'renewed'     => 'Listing renewed for :days more days.',
+    'renew_number_taken' => 'We cannot reactivate it: someone else already has an active listing with that number.',
+    'mark_sold'   => 'Mark as sold',
+    'renew'       => 'Renew',
+    'archive'     => 'Withdraw',
+    'expires_in'  => 'Expires in :days days',
+
     'attributes' => [
         'msisdn'           => 'number',
         'price'            => 'price',

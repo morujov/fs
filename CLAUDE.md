@@ -24,16 +24,38 @@
 
 | | Локально | Bluehost (прод) |
 |---|---|---|
-| PHP | **8.3** — обязательно | 8.3.32 |
+| **Laravel** | **13.x** | 13.x |
+| PHP | **8.3** | 8.3.32 |
 | MySQL | 8.0 | **5.7.44** |
 | Composer | 2.x | `/opt/cpanel/composer/bin/composer` |
 | Node | есть | **нет** — ассеты собираются локально |
 
-**PHP 8.5 не подходит.** Laravel 11 вышел в марте 2024 и с ним не тестировался.
-На машине может стоять Homebrew-PHP 8.5 — его нужно отлинковать.
+**Laravel 13, не 11.** Проект начинался на 11 — это была ошибка: security-поддержка
+Laravel 11 закончилась 12 марта 2026. Composer 2.10 правильно отказывался его ставить
+через advisory-блок. Если увидишь `policy.advisories.block false` в глобальном конфиге
+Composer — это обход той ошибки, его нужно **откатить**:
+
+```bash
+composer config --global --unset policy.advisories.block
+```
+
+Laravel 13: PHP 8.3+, багфиксы до Q3 2027, безопасность до Q1 2028.
+
+**PHP строго 8.3.** На машине есть Homebrew-PHP 8.5 — он должен быть отлинкован.
+Прод на 8.3.32, расхождение версий нам не нужно.
 
 **MySQL: прод на 5.7.** Ничего из MySQL 8: ни оконных функций, ни `CHECK`,
 ни `SKIP LOCKED`. `JSON` и generated-колонки в 5.7 есть, их используем.
+
+**Laravel 13 — что важно помнить:**
+- CSRF-мидлвара переименована: `VerifyCsrfToken` → `PreventRequestForgery`,
+  плюс проверка `Sec-Fetch-Site`. Пригодится на AJAX-эндпоинте раскрытия контактов (S4).
+- `config/cache.php` → `serializable_classes => false`. Мы кэшируем только скаляры
+  (`Setting::get`), так что менять нечего. Не ослаблять без причины.
+- Tailwind 4: `tailwind.config.js` и `postcss.config.js` больше не используются,
+  конфиг через `@tailwindcss/vite`.
+- `symfony/polyfill-php85` определяет глобальные `array_first()`/`array_last()`.
+  Использовать `Arr::first()`/`Arr::last()`, а не глобальные функции.
 
 ## Инварианты — не ломать
 
@@ -99,62 +121,68 @@ NULL-ы в UNIQUE не конфликтуют → «один активный н
 
 ---
 
-## Задача сейчас: поднять окружение
+## Задача сейчас: апгрейд на Laravel 13
+
+Ветка `upgrade-laravel-13` уже содержит файловую часть — её подготовили без
+возможности запустить composer. Осталось выполнить и проверить.
+
+**Что уже сделано в ветке:**
+- `composer.json`: `laravel/framework ^13.8`, `laravel/tinker ^3.0`,
+  `phpunit/phpunit ^12.5.12`, `php ^8.3`; убран `laravel/sail`
+- Файлы скелета (`bootstrap/`, `config/*`, `phpunit.xml`, `package.json`,
+  `vite.config.js`, `resources/`) заменены на версии из `laravel/laravel:13.x`
+- Удалены `tailwind.config.js`, `postcss.config.js` (Tailwind 4 их не использует)
+- Удалён `.github/` — это мейнтенерский CI самого laravel/laravel, не наш
+- `config/services.php`: добавлен блок `google` для Socialite
+- Проверено: `laravel/socialite ^5.x` объявляет `illuminate/contracts: ^13.0` — совместим
+
+**Наши файлы намеренно НЕ трогали** — их нельзя перезаписывать скелетом:
+`app/Models/User.php`, `database/factories/UserFactory.php`,
+`database/seeders/DatabaseSeeder.php`,
+`database/migrations/0001_01_01_000000_create_users_table.php`,
+`.env.example`, `README.md`, `config/numeros.php`.
+
+**Выполнить:**
 
 ```bash
-# ВАЖНО: brew спрашивает подтверждение. Без NONINTERACTIVE=1 команда
-# зависнет на промпте, а следующие строки скрипта уйдут ему в ответ.
-NONINTERACTIVE=1 brew install php@8.3 composer mysql@8.0
-
-brew unlink php 2>/dev/null
-brew link --overwrite --force php@8.3
-
-# Шелл — bash, не zsh. Правится ~/.bash_profile, не ~/.zshrc.
-echo 'export PATH="/opt/homebrew/opt/mysql@8.0/bin:$PATH"' >> ~/.bash_profile
-export PATH="/opt/homebrew/opt/mysql@8.0/bin:$PATH"
-
-brew services start mysql@8.0
-sleep 5
-
-# Проверить перед тем, как идти дальше:
-php -v          # обязан быть 8.3.x, НЕ 8.5
-composer -V
-mysql --version
-
-mysql -u root -h 127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS numeros_es CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+# 1. Откатить обход advisory-блока — он был неправильным решением.
+#    Composer говорил правду: Laravel 11 без security-поддержки.
+composer config --global --unset policy.advisories.block
 
 cd ~/Documents/numeros-es
+git checkout upgrade-laravel-13
+
+# 2. Обновить зависимости. Advisory-блок теперь ДОЛЖЕН молчать: Laravel 13
+#    поддерживается. Если он снова ругается — не обходи, разберись и сообщи.
+rm -rf vendor composer.lock
 composer install
-[ -f .env ] || cp .env.example .env
-php artisan key:generate
-php artisan migrate --seed
+
+# 3. Проверить
+php artisan migrate:fresh --seed
+php artisan test
+npm install && npm run build
 ```
 
-Ожидаемо: 52 провинции, 14 операторов, ~500 объявлений.
+Ожидаемо: 52 провинции, 14 операторов, ~487 объявлений, 0 дублей активных msisdn.
 
-```bash
-php artisan tinker --execute="echo App\Models\Listing::count();"
-```
+**Затем:** запушить ветку и открыть PR в `main` (после того как PR #1 вмёржен).
 
 ### Если падает
 
 - `Specified key was too long` → `Schema::defaultStringLength(191)` в `AppServiceProvider::boot()`
-- Ошибка на generated-колонке → проверь версию MySQL, нужна ≥ 5.7.6
-- `requires php ^8.2 but your php version 8.5` → `brew unlink php` не сработал
-- Фабрика падает на `Operator::inRandomOrder()->value('id')` → сидеры справочников
-  должны отработать раньше `DemoListingSeeder`; порядок задан в `DatabaseSeeder`
-
-### Когда заработает
-
-```bash
-git push -u origin main    # remote уже настроен на github.com/morujov/fs
-```
-
-Затем сообщи, что прошло и что чинил — и можно начинать S2.
+- Ошибка на generated-колонке → нужна MySQL ≥ 5.7.6
+- `requires php ^8.3 but your php version 8.5` → `brew unlink php && brew link --overwrite --force php@8.3`
+- Socialite не резолвится → сообщи, не понижай Laravel обратно
+- Vite/Tailwind 4 ругается на конфиг → остатки Tailwind 3, проверь что
+  `tailwind.config.js` и `postcss.config.js` удалены
 
 ## Чего не делать
 
+- **Не обходи advisory-блок Composer.** Если он сработал — это сигнал, а не помеха.
+  Сообщи, что именно он говорит.
+- **Не понижай Laravel обратно на 11 или 12.** 11 без поддержки с марта 2026,
+  у 12 багфиксы кончаются 13 августа 2026.
 - Не добавляй Filament — он в S5, сейчас потянет конфликты версий.
 - Не трогай `BLUEPRINT-numeros-es.md` без явной просьбы: это источник правды
   по решениям, а не рабочий файл.
-- Не переходи к S2, пока `migrate --seed` не пройдёт чисто.
+- Не переходи к S2, пока `migrate:fresh --seed` и `php artisan test` не пройдут чисто.

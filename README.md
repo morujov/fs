@@ -5,7 +5,7 @@
 
 Полное ТЗ и архитектурные решения — в `BLUEPRINT-numeros-es.md`.
 
-**Стек:** Laravel 11 · PHP 8.3 · MySQL · Blade + Alpine + Tailwind
+**Стек:** Laravel 13 · PHP 8.3 · MySQL · Blade + Alpine + Tailwind 4
 **Авторизация:** только Google Sign-In. Паролей в системе нет.
 
 ---
@@ -15,7 +15,7 @@
 ### 1. PHP 8.3, Composer, MySQL
 
 **Версия PHP важна.** На Bluehost стоит 8.3.32. Локально должно быть 8.3, а не
-8.4/8.5: Laravel 11 вышел в марте 2024 и с PHP 8.5 никогда не тестировался.
+8.4/8.5: расхождение с продом нам не нужно. Laravel 13 требует минимум 8.3.
 Если в системе уже есть Homebrew-PHP другой версии, его нужно отлинковать —
 иначе `php` продолжит указывать на него.
 
@@ -128,7 +128,7 @@ Remote `origin` уже настроен на `github.com/morujov/fs`.
 
 **`could not find driver`** — нет `pdo_mysql`. Проверить: `php -m | grep pdo_mysql`.
 
-**`requires php ^8.2 but your php version 8.5.x`** — не переключился PHP.
+**`requires php ^8.3 but your php version 8.5.x`** — не переключился PHP.
 `brew unlink php && brew link --overwrite --force php@8.3`.
 
 ---

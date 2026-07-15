@@ -12,7 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Вход только через Google, страницы `login` нет. Неаутентифицированного
+        // гостя на защищённом маршруте отправляем на инициатор Google-входа;
+        // исходный URL фреймворк сам кладёт в `url.intended` (redirect()->guest),
+        // и callback вернёт туда через redirect()->intended().
+        $middleware->redirectGuestsTo(fn () => route('auth.google.redirect'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

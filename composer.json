@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "numeros-es/anuncios",
     "type": "project",
-    "description": "Tablón de anuncios de números móviles en España",
+    "description": "Tabl\u00f3n de anuncios de n\u00fameros m\u00f3viles en Espa\u00f1a",
     "keywords": [
         "laravel",
         "clasificados",
@@ -40,7 +40,8 @@
     "scripts": {
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
-            "@php artisan package:discover --ansi"
+            "@php artisan package:discover --ansi",
+            "@php artisan filament:upgrade"
         ],
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"

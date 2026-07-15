@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasAvatar;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -15,13 +18,13 @@ use Illuminate\Notifications\Notifiable;
  * пароля не существует, email от Google приходит верифицированным.
  * Поэтому здесь нет ни MustVerifyEmail, ни хэширования.
  */
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser, HasAvatar
 {
     use HasFactory, Notifiable;
 
     protected $fillable = [
         'google_id', 'name', 'email', 'avatar_url',
-        'seller_type', 'phone', 'locale', 'status',
+        'seller_type', 'phone', 'locale', 'status', 'role',
     ];
 
     protected $hidden = [
@@ -86,5 +89,45 @@ class User extends Authenticatable
         return $this->reveals()
             ->where('created_at', '>=', now()->subDay())
             ->count();
+    }
+
+    // ---------------------------------------------------------------
+    // Админка
+    // ---------------------------------------------------------------
+
+    public function isModerator(): bool
+    {
+        return in_array($this->role, ['moderator', 'superadmin'], true);
+    }
+
+    public function isSuperadmin(): bool
+    {
+        return $this->role === 'superadmin';
+    }
+
+    /**
+     * Пускать ли в админку.
+     *
+     * Fail-closed: role по умолчанию NULL, и NULL сюда не проходит.
+     * Доступ в панель не может достаться случайно — только явным
+     * назначением роли.
+     *
+     * Заблокированный не входит, даже если роль есть: блокировка сильнее
+     * привилегии. Иначе скомпрометированный аккаунт модератора остался бы
+     * с доступом после бана.
+     *
+     * Страницы входа у панели нет намеренно (см. AdminPanelProvider):
+     * гость упирается в Authenticate middleware и улетает на Google.
+     * Поэтому сюда попадают уже аутентифицированные.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $this->isModerator() && ! $this->isBlocked();
+    }
+
+    /** Аватар из Google-профиля вместо генерации по инициалам. */
+    public function getFilamentAvatarUrl(): ?string
+    {
+        return $this->avatar_url;
     }
 }

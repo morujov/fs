@@ -12,10 +12,9 @@
 
 ## Состояние
 
-S0–S3 готовы и проверены (Laravel 13.20.0, 172 теста зелёные).
-PR #1–#3 вмёржены, **PR #4 (S3) открыт**.
-S4 написан, но **ещё не запускался** — ветка `s4-storefront-reveal`
-поверх S3. Дальше S5 (админка на Filament).
+S0–S4 готовы и проверены (Laravel 13.20.0, 204 теста зелёные).
+PR #1–#4 вмёржены, **PR #5 (S4) открыт**.
+S5 начат — ветка `s5-filament-admin` поверх S4. Дальше S6 (магазины).
 
 **Важно про происхождение кода.** Он пишется в окружении, где нет PHP, и
 проверяется уже здесь. Поэтому свежие правки могут падать на первом прогоне —
@@ -188,59 +187,130 @@ NULL-ы в UNIQUE не конфликтуют → «один активный н
 
 ---
 
-## Задача сейчас: прогнать S4 — витрина и гейт на контактах
+## Задача сейчас: S5 — админка на Filament
 
-Ветка `s4-storefront-reveal`, поверх `s3-moderation-pipeline` (PR #4).
-Код написан без запуска.
+Ветка `s5-filament-admin`, поверх `s4-storefront-reveal` (PR #5).
 
-**Что в S4:**
-- `ContactRevealLimiter` — 5/мин и 20/сутки на аккаунт, 40/сутки на IP,
-  автоблок на 50, детект бота по интервалу. Пороги из `settings`.
-- `ContactRevealController` — POST `/api/listings/{listing}/contact`.
-  **Единственное место, откуда наружу выходит полный контакт.**
-- `ListingQuery` — все фильтры витрины в одном классе.
-- `BrowseController` — листинг и карточка. Открыто анониму и Googlebot.
-- Вьюхи: витрина, карточка, компонент `listing-card`. Каркас получил
-  `csrf-token` и `@stack('scripts')`.
-- `lang/es|en/browse.php` и `reveal.php`.
-- `ContactRevealTest` + `BrowseTest`.
-- Удалены `welcome.blade.php` и оба `ExampleTest` — главная теперь витрина,
-  и старый `GET /` -> 200 бил бы в БД без миграций.
+**Это задача другого рода, чем S1–S4.** Там код приезжал написанным, и
+ты его прогонял. Здесь наоборот: подготовлено только то, что требовало
+решений, а основную часть предстоит **сгенерировать тебе** — у Filament
+для этого есть свои генераторы, и они надёжнее, чем классы, написанные
+вслепую в API, которого автор не знает. Пиши сам, сверяясь с доками.
 
-**Выполнить:**
+### Что уже готово (не переделывай)
+
+- `composer.json`: `filament/filament: ^5.0`. **Именно v5** — блюпринт
+  говорил v3, это была ошибка того же рода, что Laravel 11. Для Laravel 13
+  нужен v5 (вышел 16.01.2026 под Livewire v4; API от v4 не менялся).
+- Миграция `add_role_to_users_table`: `role` = NULL | moderator | superadmin.
+  NULL по умолчанию — доступ в админку не может достаться случайно.
+- `User implements FilamentUser, HasAvatar`:
+  `canAccessPanel()` пускает только модератора и суперадмина и **не пускает
+  заблокированного, даже с ролью** — блокировка сильнее привилегии.
+  `getFilamentAvatarUrl()` отдаёт аватар из Google.
+- `AdminSeeder`: выдаёт роль по `ADMIN_EMAIL`. Не создаёт пользователя —
+  пароля в системе нет, аккаунт заводится только Google-входом.
+  `make:filament-user` у нас **не сработает**: он спрашивает пароль.
+
+### Установка
 
 ```bash
 cd ~/Documents/numeros-es
-git checkout s4-storefront-reveal
-php artisan migrate:fresh --seed
-php artisan test
-npm run build
+git checkout s5-filament-admin
+composer update           # filament/filament ^5.0
+php artisan filament:install --panels
+php artisan migrate
 ```
 
-Ключевое, что обязано быть зелёным:
-- `a_guest_never_sees_the_full_contact_in_the_html` — **главный тест проекта**
-- `an_authenticated_user_who_has_not_revealed_yet_also_sees_no_contact_in_the_html`
-- `a_guest_can_browse` / `a_guest_can_search_and_filter` — инвариант №4
-- `revealing_the_same_listing_twice_does_not_consume_the_limit`
-- `crossing_the_autoblock_threshold_blocks_the_account`
+### Что править в сгенерированном AdminPanelProvider
 
-### Ручная проверка, которую тесты не заменяют
+**Вход через Google, а не через Filament.** Ключевое решение:
 
-Открой карточку гостем и нажми **Ctrl+U**. В исходнике не должно быть ни
-полного телефона, ни email, ни `wa.me`. Это ровно тот способ, которым
-вскрывают половину досок объявлений, и ровно то, что мы обещали не делать.
+- **НЕ вызывай `->login()`.** Своей страницы входа у панели не будет.
+  Гость упрётся в `Authenticate` middleware, а она уже настроена в
+  `bootstrap/app.php` на `redirectGuestsTo(route('auth.google.redirect'))`.
+  Google-вход заработает сам, переписывать ничего не нужно.
+- **НЕ включай** `->registration()`, `->passwordReset()`,
+  `->emailVerification()`, `->profile()` — все они про пароли, которых
+  у нас нет (инвариант №5).
+- `->authGuard('web')` — тот же гард, что у сайта.
+- `->path('admin')`, `->id('admin')`.
+- Оставь `Authenticate::class` в `authMiddleware()`.
+
+Проверь после установки: `AdminPanelProvider` зарегистрирован в
+`bootstrap/providers.php`.
+
+### Ресурсы — генерируй, не пиши руками
+
+```bash
+php artisan make:filament-resource Listing --generate
+php artisan make:filament-resource User --generate
+php artisan make:filament-resource Report --generate
+php artisan make:filament-resource Shop --generate
+php artisan make:filament-resource BlocklistNumber --generate
+php artisan make:filament-resource NumberingRange --generate
+php artisan make:filament-resource Operator --generate
+php artisan make:filament-resource Setting --generate
+```
+
+`--generate` читает модель и строит форму и таблицу сам. Дальше подпили.
+
+**Важно по правам:**
+- `Setting`, `NumberingRange`, `BlocklistNumber`, `User` — только superadmin.
+  Модератору незачем править пороги и роли.
+- `Listing`, `Report` — модератор и superadmin.
+- Проверку роли ставь через политики или `canAccess()` ресурса — не через
+  скрытие пунктов меню. Скрытая ссылка не защищает URL.
+
+**Чего в админке быть не должно:**
+- Полного контакта продавца в таблицах и экспортах. Инвариант №2 не имеет
+  исключения для админки: модератору для разбора жалобы контакт не нужен,
+  а экспорт с контактами — это готовая утечка базы одним CSV.
+  Показывай `maskedContact()`. Если модератору всё же нужен полный контакт —
+  это отдельное осознанное решение с логированием, а не побочный эффект
+  генератора.
+
+### Виджет, ради которого всё затевалось
+
+`app/Filament/Widgets/TopRevealAccounts` — таблица «топ аккаунтов по
+раскрытиям за 24 часа»:
+
+```sql
+SELECT user_id, COUNT(*) AS reveals, COUNT(DISTINCT ip) AS ips, MAX(created_at)
+FROM contact_reveals
+WHERE created_at >= NOW() - INTERVAL 1 DAY
+GROUP BY user_id
+ORDER BY reveals DESC
+LIMIT 10
+```
+
+Это единственное место, где скрейпера видно в первый день. Всё остальное
+на дашборде — приятно, но не обязательно. Если время ограничено — сделай
+этот виджет и остановись.
+
+Остальные виджеты по желанию: объявления по статусам, размер очереди
+модерации, открытые жалобы, отказы по причинам (`moderation_logs`
+group by `rule` where `result='reject'`).
+
+### Тесты, которые нужны
+
+- гость на `/admin` → редирект на Google, а не 500 и не форма входа
+- пользователь без роли → 403
+- заблокированный с ролью `superadmin` → 403
+- модератор → 200 на очереди модерации, 403 на настройках
+- в таблице объявлений админки нет полного `contact_phone`
 
 ### Если падает
 
-- `Route [listings.contact] not defined` → `routes/web.php` перезаписан
-- 419 вместо 200 на раскрытии → CSRF; в Laravel 13 мидлвара называется
-  `PreventRequestForgery` и проверяет `Sec-Fetch-Site`
-- Лимиты не срабатывают → кэш настроек; в тестах есть `cache()->flush()`
-- `orWhereJsonContains` падает → проверь, что БД MySQL, а не SQLite
-- Тесты пагинации падают на `assertSee('page=2')` → изменился `per_page`
-  в settings
+- `Class FilamentUser not found` → `composer update` не отработал
+- Панель 500 на входе → проверь, что `->login()` НЕ вызван и
+  `AdminPanelProvider` в `bootstrap/providers.php`
+- Ассеты не собираются → Filament v5 требует Tailwind 4.1+; у нас Tailwind 4,
+  проверь версию и импорты CSS filament в `resources/css/app.css`
+- `make:filament-user` просит пароль → так и есть, им не пользуемся,
+  роль выдаёт `AdminSeeder`
 
-**Затем:** закоммитить, запушить, PR в `main` (после PR #4).
+**Затем:** закоммитить, запушить, PR в `main` (после PR #5).
 
 ## Чего не делать
 
@@ -248,7 +318,10 @@ npm run build
   Сообщи, что именно он говорит.
 - **Не понижай Laravel обратно на 11 или 12.** 11 без поддержки с марта 2026,
   у 12 багфиксы кончаются 13 августа 2026.
-- Не добавляй Filament — он в S5, сейчас потянет конфликты версий.
+- **Filament — только v5.** Не v3 и не v4: Laravel 13 требует v5.
+- **Не включай страницу входа Filament** и вообще ничего парольное:
+  `->login()`, `->registration()`, `->passwordReset()`, `->profile()`.
+  Вход только через Google (инвариант №5).
 - **Не доводи вьюхи S2 до ума.** Они черновые намеренно: вёрстка в S4,
   где появится витрина и дизайн-система. Полировать их сейчас — выкинуть дважды.
 - **Не публикуй объявление напрямую в `active`.** Единственное место, где

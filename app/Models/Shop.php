@@ -50,6 +50,24 @@ class Shop extends Model
         return $this->status === 'verified';
     }
 
+    /**
+     * Маска телефона магазина — до первой цифры, как у продавца-физлица
+     * (Listing::maskedPhone). Инвариант №2 не делает исключения: полный
+     * контакт не рендерится в HTML нигде, включая админку и её экспорт.
+     *
+     * Магазин — тоже продавец. Проверку NIF/CIF модератор делает алгоритмом
+     * по самому NIF/CIF (пробел №28), телефон для этого не нужен. Если в S6
+     * у витрины магазина появится осознанно публичный контакт — это будет
+     * отдельное решение снять маску там, а не побочный эффект генератора.
+     */
+    public function maskedPhone(): string
+    {
+        $digits = preg_replace('/\D/', '', (string) $this->contact_phone);
+        $first  = $digits !== '' ? substr($digits, -9, 1) : '6';
+
+        return $first.'** ** ** **';
+    }
+
     public function getRouteKeyName(): string
     {
         return 'slug';

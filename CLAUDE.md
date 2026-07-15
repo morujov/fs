@@ -12,9 +12,9 @@
 
 ## Состояние
 
-S0 и S1 готовы и проверены на живой машине: Laravel 13.20.0,
-`migrate:fresh --seed` и тесты зелёные, ~487 демо-объявлений.
-Дальше по плану S2 (Google Sign-In + подача объявления + OTP).
+S0, S1 готовы и проверены (Laravel 13.20.0, 106 тестов зелёные, ~487 демо).
+S2 написан, но **ещё не запускался** — ветка `s2-auth-listing-otp`.
+Дальше S3 (конвейер модерации).
 
 **Важно про происхождение кода.** Он пишется в окружении, где нет PHP, и
 проверяется уже здесь. Поэтому свежие правки могут падать на первом прогоне —
@@ -81,6 +81,9 @@ Laravel 13: PHP 8.3+, багфиксы до Q3 2027, безопасность д
 5. **Авторизация только Google OAuth.** Паролей нет: ни колонки `password`,
    ни `password_reset_tokens`, ни `email_verified_at` (Google даёт email
    верифицированным). Не добавляй их обратно.
+   Scopes строго `openid email profile` — «базовый вход». Он не требует
+   аудита Google и публичной политики конфиденциальности на этапе Testing.
+   Любой лишний scope ломает и то, и другое.
 6. **OTP-SMS остаётся при Google-входе.** Google подтверждает личность,
    но не владение продаваемым номером. Это разные проверки.
 7. **Ни одной пользовательской строки в коде.** Только `__('...')` и файлы
@@ -101,6 +104,22 @@ Laravel 13: PHP 8.3+, багфиксы до Q3 2027, безопасность д
    Разделение обязательно: `NumberPatternQuery` — синтаксис (чистый, без БД,
    мгновенные юнит-тесты защиты от `%`). `NumberingPlan` — политика (БД + кэш,
    fail-closed). Смешать их значит утащить БД в тесты санитизации.
+
+10. **На хостинге живёт чужой боевой сайт — cac.az.**
+    Тот же Unix-юзер `clsthmmy`. cac.az принимает платежи (Epoint, PashaBank),
+    его docroot — `public_html`. Аккаунт **уже упирается в лимит процессов**
+    (`fork: Resource temporarily unavailable` при обычном входе в терминал).
+
+    - **`public_html` не трогать ни одним файлом.** Это docroot cac.az.
+    - **Никаких поддоменов cac.az**: `test.cac.az` занят редиректом,
+      HSTS `includeSubDomains` действует год. Только addon-домен.
+    - **Composer и npm на хосте не запускать.** Собираем локально, на хост
+      едет тарбол. Это не удобство — это чтобы не уронить платёжный сайт
+      пиком процессов.
+    - Отдельная база и отдельный MySQL-юзер. Наш `.env` не должен иметь
+      доступа к базе cac.az.
+
+    Подробности — блюпринт, раздел 8.
 
 ## Ключевые места
 
@@ -168,63 +187,65 @@ NULL-ы в UNIQUE не конфликтуют → «один активный н
 
 ---
 
-## Задача сейчас: прогнать план нумерации и новые тесты
+## Задача сейчас: прогнать S2
 
-Ветка `upgrade-laravel-13`. Апгрейд уже выполнен и проверен (Laravel 13.20.0,
-`migrate:fresh --seed` и тесты зелёные). Сверху добавлено то, что нельзя было
-проверить без PHP.
+Ветка `s2-auth-listing-otp`, поверх `upgrade-laravel-13` (PR #2).
+Код написан без запуска — падения на первом прогоне ожидаемы.
 
-**Что добавлено:**
-- `numbering_ranges` — план нумерации данными. Матчинг по самому длинному
-  префиксу, `70` перебивает `7`. Модель, сервис `NumberingPlan`, сидер.
-- `NumberPatternQuery` очищен от политики: `isValidMsisdn` убран, вместо него
-  `isWellFormed` (структура). Регулярка `^[67]\d{8}$` пропускала 70X.
-- `ListingFactory` спрашивает план вместо зашитых `['6','7']`. Раньше ~5%
-  демо-объявлений были 70X, противоречащими собственному блок-листу.
-- `BlocklistSeeder` опустошён: `70`/`8`/`9`/`900`/`902` уехали в план,
-  а `666666666` и `612345678` были выдуманными записями, конфликтовавшими
-  с фабрикой.
-- `Listing::scopeMatchingPattern` больше не дублирует санитизацию — делегирует.
-- `phpunit.xml`: SQLite → MySQL, иначе миграция с `IF()` не проходит.
-- 5 тестовых файлов вместо `assertTrue(true)`.
+**Что в S2:**
+- Google Sign-In: `GoogleAuthController`, роуты, поиск по `google_id` (не по email)
+- SMS-слой: `SmsSenderInterface` + `LogSmsSender` (коды в лог) + заготовка LabsMobile.
+  `SmsManager` не даст использовать драйвер `log` в проде.
+- `OtpService`: выпуск/проверка, хэш кода, TTL, лимиты попыток и отправок из settings
+- Подача: `StoreListingRequest` + правило `SellableMsisdn` (через `NumberingPlan`),
+  `ListingController`, `OtpController`. Объявление доходит только до `pending`.
+- `lang/es`, `lang/en` — инвариант №7, ни одной строки в коде
+- Черновые Blade-вьюхи. Вёрстка — в S4 вместе с витриной, сейчас не тратить на неё время.
+- 3 тестовых файла: `GoogleAuthTest`, `OtpServiceTest`, `ListingSubmissionTest`
 
 **Выполнить:**
 
 ```bash
 cd ~/Documents/numeros-es
-git checkout upgrade-laravel-13
-
-# Feature-тесты идут на MySQL
-mysql -u root -h 127.0.0.1 -e "CREATE DATABASE IF NOT EXISTS numeros_es_testing
-  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-
+git checkout s2-auth-listing-otp
+composer install          # добавился laravel/socialite
 php artisan migrate:fresh --seed
 php artisan test
 ```
 
-Ожидаемо: ~487 объявлений, 0 дублей активных msisdn, **0 объявлений с
-префиксом 70**, все тесты зелёные.
-
-Проверить отдельно — это и был баг:
-
-```bash
-php artisan tinker --execute="
-  echo 'всего: '.App\Models\Listing::count().PHP_EOL;
-  echo '70X (должно быть 0): '.App\Models\Listing::where('msisdn','LIKE','70_______')->count().PHP_EOL;
-  echo 'блок-лист (должен быть пуст): '.App\Models\BlocklistNumber::count().PHP_EOL;
-"
-```
+Тесты Socialite мокают, поэтому **ключи Google для прогона не нужны**.
+Для ручной проверки в браузере — нужны, см. ниже.
 
 ### Если падает
 
-- Тесты не видят БД → не создана `numeros_es_testing`
-- `IF()` / syntax error в миграции → тесты всё ещё идут на SQLite, проверь `phpunit.xml`
-- `ListingFactory` кидает RuntimeException про 500 попыток → `NumberingRangeSeeder`
-  не отработал или запретил всё; проверь порядок в `DatabaseSeeder`
-- Тесты `NumberingPlanTest` падают на кэше → `NumberingPlan::flush()` не вызван;
-  в тестах для этого есть `fresh()`
+- `Target [SmsSenderInterface] is not instantiable` → биндинг в `AppServiceProvider::register`
+- `Socialite driver [google] not found` → нет `laravel/socialite` в `composer.json`,
+  либо не заполнен блок `google` в `config/services.php`
+- Мок Socialite не подхватывается → проверь, что мокается фасад `Socialite::shouldReceive('driver')`
+- `route [home] not defined` → `routes/web.php` перезаписан
+- Тесты OTP падают на `travel()` → нужен трейт `InteractsWithTime` (в Laravel 13 он в TestCase)
 
-**Затем:** закоммитить, запушить, добавить в PR #2 (или отдельным PR, если #2 уже вмёржен).
+### Ручная проверка (нужны ключи Google)
+
+Google Cloud Console → Credentials → OAuth client ID → Web application.
+Redirect URI: `http://127.0.0.1:8000/auth/google/callback`. Consent screen:
+External, статус Testing, себя в Test users. Scopes не трогать.
+
+```bash
+# .env
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback
+APP_URL=http://127.0.0.1:8000
+
+php artisan serve
+```
+
+Сценарий: войти через Google → подать объявление → код OTP найти в
+`storage/logs/laravel.log` (SMS_DRIVER=log, реальных отправок нет) → ввести →
+объявление в `pending` с заполненным `phone_verified_at`.
+
+**Затем:** закоммитить правки, запушить, открыть PR в `main` (после PR #2).
 
 ## Чего не делать
 
@@ -233,6 +254,12 @@ php artisan tinker --execute="
 - **Не понижай Laravel обратно на 11 или 12.** 11 без поддержки с марта 2026,
   у 12 багфиксы кончаются 13 августа 2026.
 - Не добавляй Filament — он в S5, сейчас потянет конфликты версий.
+- **Не доводи вьюхи S2 до ума.** Они черновые намеренно: вёрстка в S4,
+  где появится витрина и дизайн-система. Полировать их сейчас — выкинуть дважды.
+- **Не публикуй объявление напрямую в `active`.** Оно доходит до `pending`;
+  публикует конвейер модерации в S3, и только после OTP.
+- **Не включай боевой SMS-драйвер** без явной просьбы: ~0.05 €/SMS,
+  цикл отладки съест бюджет незаметно.
 - Не трогай `BLUEPRINT-numeros-es.md` без явной просьбы: это источник правды
   по решениям, а не рабочий файл.
 - Не переходи к S2, пока `migrate:fresh --seed` и `php artisan test` не пройдут чисто.

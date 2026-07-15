@@ -12,9 +12,10 @@
 
 ## Состояние
 
-S0, S1 готовы и проверены (Laravel 13.20.0, 106 тестов зелёные, ~487 демо).
-S2 написан, но **ещё не запускался** — ветка `s2-auth-listing-otp`.
-Дальше S3 (конвейер модерации).
+S0, S1, S2 готовы и проверены (Laravel 13.20.0, 143 теста зелёные).
+PR #1 и #2 вмёржены, **PR #3 (S2) открыт**.
+S3 написан, но **ещё не запускался** — ветка `s3-moderation-pipeline`
+поверх S2. Дальше S4 (витрина).
 
 **Важно про происхождение кода.** Он пишется в окружении, где нет PHP, и
 проверяется уже здесь. Поэтому свежие правки могут падать на первом прогоне —
@@ -187,65 +188,53 @@ NULL-ы в UNIQUE не конфликтуют → «один активный н
 
 ---
 
-## Задача сейчас: прогнать S2
+## Задача сейчас: прогнать S3 — конвейер модерации
 
-Ветка `s2-auth-listing-otp`, поверх `upgrade-laravel-13` (PR #2).
+Ветка `s3-moderation-pipeline`, поверх `s2-auth-listing-otp` (PR #3).
 Код написан без запуска — падения на первом прогоне ожидаемы.
 
-**Что в S2:**
-- Google Sign-In: `GoogleAuthController`, роуты, поиск по `google_id` (не по email)
-- SMS-слой: `SmsSenderInterface` + `LogSmsSender` (коды в лог) + заготовка LabsMobile.
-  `SmsManager` не даст использовать драйвер `log` в проде.
-- `OtpService`: выпуск/проверка, хэш кода, TTL, лимиты попыток и отправок из settings
-- Подача: `StoreListingRequest` + правило `SellableMsisdn` (через `NumberingPlan`),
-  `ListingController`, `OtpController`. Объявление доходит только до `pending`.
-- `lang/es`, `lang/en` — инвариант №7, ни одной строки в коде
-- Черновые Blade-вьюхи. Вёрстка — в S4 вместе с витриной, сейчас не тратить на неё время.
-- 3 тестовых файла: `GoogleAuthTest`, `OtpServiceTest`, `ListingSubmissionTest`
+**Что в S3:**
+- `ModerationPipeline` + 11 правил в `app/Services/Moderation/Rules/`
+- Исходы: `pass` / `flag` (копится в score) / `reject` / **`hold`**.
+  `hold` — новый, добавлен миграцией в enum `moderation_logs.result`.
+  Нужен для OTP: непройденный код — не претензия к объявлению, продавец
+  просто ещё не ввёл его. Ни `reject` (соврать), ни `flag` (звать модератора
+  посмотреть на пустоту) не годились.
+- Решение: любой reject → `rejected`; любой hold → `pending`;
+  score >= порога (settings) → `pending`; иначе → `active`.
+- Конвейер идемпотентен: зовётся при подаче, после OTP, после правки.
+- Подключён в `ListingController::store` (до OTP — чтобы отказ пришёл
+  до SMS, а не после) и в `OtpController::verify`.
+- `lang/es|en/moderation.php` — причины на языке продавца.
+- `ModerationPipelineTest` — 25+ тестов.
 
 **Выполнить:**
 
 ```bash
 cd ~/Documents/numeros-es
-git checkout s2-auth-listing-otp
-composer install          # добавился laravel/socialite
-php artisan migrate:fresh --seed
+git checkout s3-moderation-pipeline
+php artisan migrate:fresh --seed     # есть новая миграция (enum hold)
 php artisan test
 ```
 
-Тесты Socialite мокают, поэтому **ключи Google для прогона не нужны**.
-Для ручной проверки в браузере — нужны, см. ниже.
+Ключевое, что обязано быть зелёным:
+- `a_listing_without_otp_is_never_published`
+- `a_phone_in_the_description_sends_the_listing_to_manual_review`
+- `an_ordinary_description_with_digits_is_not_flagged` — ложные
+  срабатывания стоят нам честных продавцов
+- `every_rule_is_logged_including_the_ones_that_passed`
 
 ### Если падает
 
-- `Target [SmsSenderInterface] is not instantiable` → биндинг в `AppServiceProvider::register`
-- `Socialite driver [google] not found` → нет `laravel/socialite` в `composer.json`,
-  либо не заполнен блок `google` в `config/services.php`
-- Мок Socialite не подхватывается → проверь, что мокается фасад `Socialite::shouldReceive('driver')`
-- `route [home] not defined` → `routes/web.php` перезаписан
-- Тесты OTP падают на `travel()` → нужен трейт `InteractsWithTime` (в Laravel 13 он в TestCase)
+- `Data truncated for column 'result'` → не прогнали новую миграцию
+  (`2026_07_15_000100_add_hold_to_moderation_logs_result`)
+- `Target [NumberingPlan] is not instantiable` → правило резолвится через
+  `app()`, проверь конструктор `NumberIsSellable`
+- Тесты блок-листа падают через раз → кэш; в тестах есть `NotBlocklisted::flush()`
+- `ModerationLog::insert` ругается на payload → он пишется мимо кастов,
+  поэтому json_encode вручную; читается обратно уже кастом в array
 
-### Ручная проверка (нужны ключи Google)
-
-Google Cloud Console → Credentials → OAuth client ID → Web application.
-Redirect URI: `http://127.0.0.1:8000/auth/google/callback`. Consent screen:
-External, статус Testing, себя в Test users. Scopes не трогать.
-
-```bash
-# .env
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/auth/google/callback
-APP_URL=http://127.0.0.1:8000
-
-php artisan serve
-```
-
-Сценарий: войти через Google → подать объявление → код OTP найти в
-`storage/logs/laravel.log` (SMS_DRIVER=log, реальных отправок нет) → ввести →
-объявление в `pending` с заполненным `phone_verified_at`.
-
-**Затем:** закоммитить правки, запушить, открыть PR в `main` (после PR #2).
+**Затем:** закоммитить правки, запушить, открыть PR в `main` (после PR #3).
 
 ## Чего не делать
 
@@ -256,8 +245,14 @@ php artisan serve
 - Не добавляй Filament — он в S5, сейчас потянет конфликты версий.
 - **Не доводи вьюхи S2 до ума.** Они черновые намеренно: вёрстка в S4,
   где появится витрина и дизайн-система. Полировать их сейчас — выкинуть дважды.
-- **Не публикуй объявление напрямую в `active`.** Оно доходит до `pending`;
-  публикует конвейер модерации в S3, и только после OTP.
+- **Не публикуй объявление напрямую в `active`.** Единственное место, где
+  статус становится `active`, — `ModerationPipeline::apply()`. Если появится
+  второе, инвариант «на витрину только через проверки» перестанет
+  существовать, и никто этого не заметит.
+- **Правила модерации ничего не правят в объявлении.** Они только выносят
+  суждение. В частности, НЕ вырезай контакты из описания молча: тихо менять
+  написанное человеком — плохой способ решать проблему, он не узнает, не
+  поймёт правило и повторит.
 - **Не включай боевой SMS-драйвер** без явной просьбы: ~0.05 €/SMS,
   цикл отладки съест бюджет незаметно.
 - Не трогай `BLUEPRINT-numeros-es.md` без явной просьбы: это источник правды

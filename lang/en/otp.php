@@ -12,6 +12,7 @@ return [
     'resend'   => 'Resend code',
 
     'verified' => 'Number verified. Your listing will go to review.',
+    'verified_and_published' => 'Number verified! Your listing is now published.',
     'resent'   => 'We sent you a new code.',
 
     'attributes' => [

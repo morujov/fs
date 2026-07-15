@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Seller;
 
 use App\Http\Controllers\Controller;
 use App\Models\Listing;
+use App\Services\Moderation\ModerationPipeline;
 use App\Services\Otp\OtpException;
 use App\Services\Otp\OtpService;
 use Illuminate\Http\RedirectResponse;
@@ -18,7 +19,10 @@ use Illuminate\View\View;
  */
 class OtpController extends Controller
 {
-    public function __construct(private readonly OtpService $otp) {}
+    public function __construct(
+        private readonly OtpService $otp,
+        private readonly ModerationPipeline $pipeline,
+    ) {}
 
     public function show(Request $request, Listing $listing): View|RedirectResponse
     {
@@ -50,9 +54,17 @@ class OtpController extends Controller
             return back()->withErrors(['code' => $e->userMessage()]);
         }
 
+        // OTP снял единственный hold — прогоняем конвейер заново, и теперь
+        // объявление может опубликоваться. Решение пересчитывается с нуля,
+        // а не «дописывается»: конвейер идемпотентен, и это его свойство
+        // единственное, что позволяет звать его откуда угодно.
+        $verdict = $this->pipeline->run($listing->fresh());
+
         return redirect()
             ->route('seller.listings.index')
-            ->with('status', __('otp.verified'));
+            ->with('status', $verdict->published()
+                ? __('otp.verified_and_published')
+                : __('otp.verified'));
     }
 
     public function resend(Request $request, Listing $listing): RedirectResponse

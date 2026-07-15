@@ -12,10 +12,10 @@
 
 ## Состояние
 
-S0, S1, S2 готовы и проверены (Laravel 13.20.0, 143 теста зелёные).
-PR #1 и #2 вмёржены, **PR #3 (S2) открыт**.
-S3 написан, но **ещё не запускался** — ветка `s3-moderation-pipeline`
-поверх S2. Дальше S4 (витрина).
+S0–S3 готовы и проверены (Laravel 13.20.0, 172 теста зелёные).
+PR #1–#3 вмёржены, **PR #4 (S3) открыт**.
+S4 написан, но **ещё не запускался** — ветка `s4-storefront-reveal`
+поверх S3. Дальше S5 (админка на Filament).
 
 **Важно про происхождение кода.** Он пишется в окружении, где нет PHP, и
 проверяется уже здесь. Поэтому свежие правки могут падать на первом прогоне —
@@ -188,53 +188,59 @@ NULL-ы в UNIQUE не конфликтуют → «один активный н
 
 ---
 
-## Задача сейчас: прогнать S3 — конвейер модерации
+## Задача сейчас: прогнать S4 — витрина и гейт на контактах
 
-Ветка `s3-moderation-pipeline`, поверх `s2-auth-listing-otp` (PR #3).
-Код написан без запуска — падения на первом прогоне ожидаемы.
+Ветка `s4-storefront-reveal`, поверх `s3-moderation-pipeline` (PR #4).
+Код написан без запуска.
 
-**Что в S3:**
-- `ModerationPipeline` + 11 правил в `app/Services/Moderation/Rules/`
-- Исходы: `pass` / `flag` (копится в score) / `reject` / **`hold`**.
-  `hold` — новый, добавлен миграцией в enum `moderation_logs.result`.
-  Нужен для OTP: непройденный код — не претензия к объявлению, продавец
-  просто ещё не ввёл его. Ни `reject` (соврать), ни `flag` (звать модератора
-  посмотреть на пустоту) не годились.
-- Решение: любой reject → `rejected`; любой hold → `pending`;
-  score >= порога (settings) → `pending`; иначе → `active`.
-- Конвейер идемпотентен: зовётся при подаче, после OTP, после правки.
-- Подключён в `ListingController::store` (до OTP — чтобы отказ пришёл
-  до SMS, а не после) и в `OtpController::verify`.
-- `lang/es|en/moderation.php` — причины на языке продавца.
-- `ModerationPipelineTest` — 25+ тестов.
+**Что в S4:**
+- `ContactRevealLimiter` — 5/мин и 20/сутки на аккаунт, 40/сутки на IP,
+  автоблок на 50, детект бота по интервалу. Пороги из `settings`.
+- `ContactRevealController` — POST `/api/listings/{listing}/contact`.
+  **Единственное место, откуда наружу выходит полный контакт.**
+- `ListingQuery` — все фильтры витрины в одном классе.
+- `BrowseController` — листинг и карточка. Открыто анониму и Googlebot.
+- Вьюхи: витрина, карточка, компонент `listing-card`. Каркас получил
+  `csrf-token` и `@stack('scripts')`.
+- `lang/es|en/browse.php` и `reveal.php`.
+- `ContactRevealTest` + `BrowseTest`.
+- Удалены `welcome.blade.php` и оба `ExampleTest` — главная теперь витрина,
+  и старый `GET /` -> 200 бил бы в БД без миграций.
 
 **Выполнить:**
 
 ```bash
 cd ~/Documents/numeros-es
-git checkout s3-moderation-pipeline
-php artisan migrate:fresh --seed     # есть новая миграция (enum hold)
+git checkout s4-storefront-reveal
+php artisan migrate:fresh --seed
 php artisan test
+npm run build
 ```
 
 Ключевое, что обязано быть зелёным:
-- `a_listing_without_otp_is_never_published`
-- `a_phone_in_the_description_sends_the_listing_to_manual_review`
-- `an_ordinary_description_with_digits_is_not_flagged` — ложные
-  срабатывания стоят нам честных продавцов
-- `every_rule_is_logged_including_the_ones_that_passed`
+- `a_guest_never_sees_the_full_contact_in_the_html` — **главный тест проекта**
+- `an_authenticated_user_who_has_not_revealed_yet_also_sees_no_contact_in_the_html`
+- `a_guest_can_browse` / `a_guest_can_search_and_filter` — инвариант №4
+- `revealing_the_same_listing_twice_does_not_consume_the_limit`
+- `crossing_the_autoblock_threshold_blocks_the_account`
+
+### Ручная проверка, которую тесты не заменяют
+
+Открой карточку гостем и нажми **Ctrl+U**. В исходнике не должно быть ни
+полного телефона, ни email, ни `wa.me`. Это ровно тот способ, которым
+вскрывают половину досок объявлений, и ровно то, что мы обещали не делать.
 
 ### Если падает
 
-- `Data truncated for column 'result'` → не прогнали новую миграцию
-  (`2026_07_15_000100_add_hold_to_moderation_logs_result`)
-- `Target [NumberingPlan] is not instantiable` → правило резолвится через
-  `app()`, проверь конструктор `NumberIsSellable`
-- Тесты блок-листа падают через раз → кэш; в тестах есть `NotBlocklisted::flush()`
-- `ModerationLog::insert` ругается на payload → он пишется мимо кастов,
-  поэтому json_encode вручную; читается обратно уже кастом в array
+- `Route [listings.contact] not defined` → `routes/web.php` перезаписан
+- 419 вместо 200 на раскрытии → CSRF; в Laravel 13 мидлвара называется
+  `PreventRequestForgery` и проверяет `Sec-Fetch-Site`
+- Лимиты не срабатывают → кэш настроек; в тестах есть `cache()->flush()`
+- `orWhereJsonContains` падает → проверь, что БД MySQL, а не SQLite
+- Тесты пагинации падают на `assertSee('page=2')` → изменился `per_page`
+  в settings
 
-**Затем:** закоммитить правки, запушить, открыть PR в `main` (после PR #3).
+**Затем:** закоммитить, запушить, PR в `main` (после PR #4).
 
 ## Чего не делать
 

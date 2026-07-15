@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Http\Controllers\Public\BrowseController;
+use App\Http\Controllers\Public\ContactRevealController;
 use App\Http\Controllers\Seller\ListingController;
 use App\Http\Controllers\Seller\OtpController;
 use Illuminate\Support\Facades\Route;
@@ -15,7 +17,24 @@ use Illuminate\Support\Facades\Route;
 | канал трафика, пока нет монетизации.
 */
 
-Route::get('/', fn () => view('welcome'))->name('home');
+Route::get('/', [BrowseController::class, 'index'])->name('home');
+Route::get('/numero/{listing}', [BrowseController::class, 'show'])->name('listings.show');
+
+/*
+|--------------------------------------------------------------------------
+| Раскрытие контакта — единственный гейт
+|--------------------------------------------------------------------------
+| Полное значение контакта выходит наружу ТОЛЬКО отсюда и только после
+| проверки сессии и лимитов. Всё остальное отдаёт маску.
+|
+| throttle поверх ContactRevealLimiter намеренно: HTTP-троттл дешёвый и
+| отсекает совсем грубый перебор, не доходя до БД. Лимитер — вторая линия,
+| он умнее и умеет блокировать аккаунт, но стоит запросов.
+*/
+
+Route::post('/api/listings/{listing}/contact', ContactRevealController::class)
+    ->middleware(['auth', 'throttle:30,1'])
+    ->name('listings.contact');
 
 /*
 |--------------------------------------------------------------------------

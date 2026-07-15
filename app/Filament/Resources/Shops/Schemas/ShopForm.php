@@ -29,8 +29,9 @@ class ShopForm
                     ->relationship('province', 'id'),
                 TextInput::make('website')
                     ->url(),
-                TextInput::make('contact_phone')
-                    ->tel(),
+                // Полного contact_phone магазина в форме нет: input — это тот
+                // же полный контакт в HTML (инвариант №2). Верификация NIF/CIF
+                // телефона не требует; в таблице виден маскированный.
                 TextInput::make('logo_path'),
                 Textarea::make('description')
                     ->columnSpanFull(),

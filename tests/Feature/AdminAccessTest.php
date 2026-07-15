@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Listing;
 use App\Models\Setting;
+use App\Models\Shop;
 use App\Models\User;
 use Database\Seeders\NumberingRangeSeeder;
 use Database\Seeders\OperatorSeeder;
@@ -108,5 +109,30 @@ class AdminAccessTest extends TestCase
         $this->assertStringNotContainsString('655443322', $html, 'полный телефон в таблице админки');
         $this->assertStringNotContainsString('juan.martinez@gmail.com', $html, 'email в таблице админки');
         $this->assertStringNotContainsString('Martínez', $html, 'полная фамилия в таблице админки');
+    }
+
+    #[Test]
+    public function the_admin_shop_table_never_renders_the_full_business_phone(): void
+    {
+        // Магазин — тоже продавец. Инвариант №2 без исключения: полный
+        // бизнес-контакт не рендерится в админке (ни таблица, ни экспорт).
+        // NIF/CIF модератор проверяет алгоритмом, телефон для этого не нужен.
+        Shop::create([
+            'user_id'       => User::factory()->create()->id,
+            'name'          => 'Números Pro SL',
+            'slug'          => 'numeros-pro',
+            'nif_cif'       => 'B12345674',
+            'city'          => 'Madrid',
+            'contact_phone' => '+34611998877',
+            'status'        => 'pending',
+        ]);
+
+        $html = $this->actingAs(User::factory()->create(['role' => 'superadmin']))
+            ->get('/admin/shops')
+            ->assertOk()
+            ->getContent();
+
+        $this->assertStringNotContainsString('611998877', $html, 'полный телефон магазина в таблице админки');
+        $this->assertStringContainsString('6** ** ** **', $html, 'маска телефона магазина не показана');
     }
 }

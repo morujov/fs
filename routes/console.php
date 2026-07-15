@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\ExpireListings;
+use App\Console\Commands\PruneOldData;
 use Illuminate\Support\Facades\Schedule;
 
 /*
@@ -31,5 +32,13 @@ Schedule::command('queue:work --stop-when-empty --tries=3 --max-time=50')
     ->everyMinute()
     ->withoutOverlapping();
 
-// Протухшие OTP и старые логи модерации чистить пока не нужно: объёмы
-// смешные. Когда понадобится — сюда же.
+// Ограничение хранения (GDPR ст. 5). Раз в неделю: сроки измеряются
+// месяцами, гонять чаще незачем, а на аккаунте, который делит процессы
+// с платёжным cac.az, каждый лишний запуск — чужой риск.
+//
+// Ночь воскресенья: если что-то пойдёт не так, у нас сутки до рабочего
+// понедельника cac.az.
+Schedule::command(PruneOldData::class)
+    ->weeklyOn(0, '03:30')
+    ->withoutOverlapping()
+    ->onOneServer();

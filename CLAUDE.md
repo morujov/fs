@@ -12,9 +12,16 @@
 
 ## Состояние
 
-S0–S4 готовы и проверены (Laravel 13.20.0, 204 теста зелёные).
-PR #1–#4 вмёржены, **PR #5 (S4) открыт**.
-S5 начат — ветка `s5-filament-admin` поверх S4. Дальше S6 (магазины).
+S0–S5 готовы и проверены (Laravel 13.20.0, 214 тестов зелёные).
+PR #1–#5 вмёржены, **PR #6 (S5, админка) открыт**.
+
+**S5b написан, но ещё не запускался** — ветка `s5b-lifecycle-reports`
+поверх S5. Это доделка трёх блокеров из блюпринта, которые до сих пор
+не существовали в коде: TTL (`expires_at` заполнялся, но никто его не
+читал — объявления не истекали никогда), «продано», жалобы.
+
+Дальше по важности: юр. страницы и SEO (S7) — без первых запуск в ЕС
+незаконен, без вторых нет трафика.
 
 **Важно про происхождение кода.** Он пишется в окружении, где нет PHP, и
 проверяется уже здесь. Поэтому свежие правки могут падать на первом прогоне —
@@ -187,130 +194,60 @@ NULL-ы в UNIQUE не конфликтуют → «один активный н
 
 ---
 
-## Задача сейчас: S5 — админка на Filament
+## Задача сейчас: прогнать S5b — жизненный цикл и жалобы
 
-Ветка `s5-filament-admin`, поверх `s4-storefront-reveal` (PR #5).
+Ветка `s5b-lifecycle-reports`, поверх `s5-filament-admin` (PR #6).
 
-**Это задача другого рода, чем S1–S4.** Там код приезжал написанным, и
-ты его прогонял. Здесь наоборот: подготовлено только то, что требовало
-решений, а основную часть предстоит **сгенерировать тебе** — у Filament
-для этого есть свои генераторы, и они надёжнее, чем классы, написанные
-вслепую в API, которого автор не знает. Пиши сам, сверяясь с доками.
+**Что это закрывает.** Три блокера из блюпринта, которых не было в коде:
 
-### Что уже готово (не переделывай)
+| Блокер | Было | Стало |
+|---|---|---|
+| №5 TTL | `expires_at` заполнялся, **никто не читал** — объявления не истекали никогда | `listings:expire` + крон + предупреждение за 7 дней |
+| №6 «Продано» | продавец не мог отметить | кнопка; освобождает номер |
+| №8 Жалобы | таблица есть, формы нет | форма на карточке, **без входа** |
 
-- `composer.json`: `filament/filament: ^5.0`. **Именно v5** — блюпринт
-  говорил v3, это была ошибка того же рода, что Laravel 11. Для Laravel 13
-  нужен v5 (вышел 16.01.2026 под Livewire v4; API от v4 не менялся).
-- Миграция `add_role_to_users_table`: `role` = NULL | moderator | superadmin.
-  NULL по умолчанию — доступ в админку не может достаться случайно.
-- `User implements FilamentUser, HasAvatar`:
-  `canAccessPanel()` пускает только модератора и суперадмина и **не пускает
-  заблокированного, даже с ролью** — блокировка сильнее привилегии.
-  `getFilamentAvatarUrl()` отдаёт аватар из Google.
-- `AdminSeeder`: выдаёт роль по `ADMIN_EMAIL`. Не создаёт пользователя —
-  пароля в системе нет, аккаунт заводится только Google-входом.
-  `make:filament-user` у нас **не сработает**: он спрашивает пароль.
+**Что в ветке:**
+- `ExpireListings` — команда + `--dry-run`. Истечение освобождает номер
+  (`active_msisdn` → NULL).
+- `ListingExpiringSoon` / `ListingExpired` — уведомления. `MAIL_MAILER=log`,
+  так что письма пока в лог. Это правильно: код готов, провайдер отдельно.
+- `routes/console.php` — расписание. **Крон на проде включать не сразу**:
+  аккаунт делит процессы с cac.az (инвариант №10).
+- `ListingLifecycleController` — продано / снять / продлить.
+  Продление по **подписанной ссылке** из письма: работает без входа,
+  владение доказывает подпись.
+- `ReportController` — жалоба **без входа**. Единственное исключение из
+  гейта, и оно верное: здесь данные отдают, а не забирают.
+- Миграция: `expiry_notified_at`, `renewals_count`, `sold_at`.
+- `ListingLifecycleTest` (21) + `ReportTest` (12).
 
-### Установка
+**Выполнить:**
 
 ```bash
 cd ~/Documents/numeros-es
-git checkout s5-filament-admin
-composer update           # filament/filament ^5.0
-php artisan filament:install --panels
-php artisan migrate
+git checkout s5b-lifecycle-reports
+php artisan migrate          # новая миграция
+php artisan test
+php artisan listings:expire --dry-run   # должно отработать вхолостую
 ```
 
-### Что править в сгенерированном AdminPanelProvider
-
-**Вход через Google, а не через Filament.** Ключевое решение:
-
-- **НЕ вызывай `->login()`.** Своей страницы входа у панели не будет.
-  Гость упрётся в `Authenticate` middleware, а она уже настроена в
-  `bootstrap/app.php` на `redirectGuestsTo(route('auth.google.redirect'))`.
-  Google-вход заработает сам, переписывать ничего не нужно.
-- **НЕ включай** `->registration()`, `->passwordReset()`,
-  `->emailVerification()`, `->profile()` — все они про пароли, которых
-  у нас нет (инвариант №5).
-- `->authGuard('web')` — тот же гард, что у сайта.
-- `->path('admin')`, `->id('admin')`.
-- Оставь `Authenticate::class` в `authMiddleware()`.
-
-Проверь после установки: `AdminPanelProvider` зарегистрирован в
-`bootstrap/providers.php`.
-
-### Ресурсы — генерируй, не пиши руками
-
-```bash
-php artisan make:filament-resource Listing --generate
-php artisan make:filament-resource User --generate
-php artisan make:filament-resource Report --generate
-php artisan make:filament-resource Shop --generate
-php artisan make:filament-resource BlocklistNumber --generate
-php artisan make:filament-resource NumberingRange --generate
-php artisan make:filament-resource Operator --generate
-php artisan make:filament-resource Setting --generate
-```
-
-`--generate` читает модель и строит форму и таблицу сам. Дальше подпили.
-
-**Важно по правам:**
-- `Setting`, `NumberingRange`, `BlocklistNumber`, `User` — только superadmin.
-  Модератору незачем править пороги и роли.
-- `Listing`, `Report` — модератор и superadmin.
-- Проверку роли ставь через политики или `canAccess()` ресурса — не через
-  скрытие пунктов меню. Скрытая ссылка не защищает URL.
-
-**Чего в админке быть не должно:**
-- Полного контакта продавца в таблицах и экспортах. Инвариант №2 не имеет
-  исключения для админки: модератору для разбора жалобы контакт не нужен,
-  а экспорт с контактами — это готовая утечка базы одним CSV.
-  Показывай `maskedContact()`. Если модератору всё же нужен полный контакт —
-  это отдельное осознанное решение с логированием, а не побочный эффект
-  генератора.
-
-### Виджет, ради которого всё затевалось
-
-`app/Filament/Widgets/TopRevealAccounts` — таблица «топ аккаунтов по
-раскрытиям за 24 часа»:
-
-```sql
-SELECT user_id, COUNT(*) AS reveals, COUNT(DISTINCT ip) AS ips, MAX(created_at)
-FROM contact_reveals
-WHERE created_at >= NOW() - INTERVAL 1 DAY
-GROUP BY user_id
-ORDER BY reveals DESC
-LIMIT 10
-```
-
-Это единственное место, где скрейпера видно в первый день. Всё остальное
-на дашборде — приятно, но не обязательно. Если время ограничено — сделай
-этот виджет и остановись.
-
-Остальные виджеты по желанию: объявления по статусам, размер очереди
-модерации, открытые жалобы, отказы по причинам (`moderation_logs`
-group by `rule` where `result='reject'`).
-
-### Тесты, которые нужны
-
-- гость на `/admin` → редирект на Google, а не 500 и не форма входа
-- пользователь без роли → 403
-- заблокированный с ролью `superadmin` → 403
-- модератор → 200 на очереди модерации, 403 на настройках
-- в таблице объявлений админки нет полного `contact_phone`
+Ключевое:
+- `expiring_frees_the_number_for_someone_else` — ради этого делалась
+  генерируемая колонка
+- `a_signed_link_lets_the_seller_renew_without_signing_in`
+- `an_expired_listing_cannot_be_renewed_if_someone_took_the_number`
+- `a_guest_can_report_a_listing` — иначе о чужих номерах не узнаем
+- `renewing_an_expired_listing_runs_the_moderation_pipeline_again`
 
 ### Если падает
 
-- `Class FilamentUser not found` → `composer update` не отработал
-- Панель 500 на входе → проверь, что `->login()` НЕ вызван и
-  `AdminPanelProvider` в `bootstrap/providers.php`
-- Ассеты не собираются → Filament v5 требует Tailwind 4.1+; у нас Tailwind 4,
-  проверь версию и импорты CSS filament в `resources/css/app.css`
-- `make:filament-user` просит пароль → так и есть, им не пользуемся,
-  роль выдаёт `AdminSeeder`
+- Подпись не проходит → роут `seller.listings.renew` вынесен ИЗ группы
+  `auth` намеренно; проверь, что он не внутри
+- `Route [seller.listings.renew] not defined` → `routes/web.php` перезаписан
+- Уведомления не ловятся → `Notification::fake()` в setUp
+- `Data truncated` на новых колонках → миграция не прогнана
 
-**Затем:** закоммитить, запушить, PR в `main` (после PR #5).
+**Затем:** PR в `main` (после PR #6).
 
 ## Чего не делать
 

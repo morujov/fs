@@ -13,6 +13,15 @@ return [
 
     'submitted_without_otp' => 'Anuncio creado. Pasará a revisión.',
 
+    'marked_sold' => 'Marcado como vendido. El número queda libre.',
+    'archived'    => 'Anuncio retirado.',
+    'renewed'     => 'Anuncio renovado por :days días más.',
+    'renew_number_taken' => 'No podemos reactivarlo: alguien más ya tiene un anuncio activo con ese número.',
+    'mark_sold'   => 'Marcar como vendido',
+    'renew'       => 'Renovar',
+    'archive'     => 'Retirar',
+    'expires_in'  => 'Caduca en :days días',
+
     'attributes' => [
         'msisdn'           => 'número',
         'price'            => 'precio',

@@ -3,6 +3,8 @@
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\Public\BrowseController;
 use App\Http\Controllers\Public\ContactRevealController;
+use App\Http\Controllers\Public\ReportController;
+use App\Http\Controllers\Seller\ListingLifecycleController;
 use App\Http\Controllers\Seller\ListingController;
 use App\Http\Controllers\Seller\OtpController;
 use Illuminate\Support\Facades\Route;
@@ -38,6 +40,22 @@ Route::post('/api/listings/{listing}/contact', ContactRevealController::class)
 
 /*
 |--------------------------------------------------------------------------
+| Жалоба на объявление
+|--------------------------------------------------------------------------
+| БЕЗ входа — намеренно. Самая важная жалоба это «мой номер продают без
+| меня», и оставляет её человек, у которого аккаунта нет и не будет.
+| Потребовать Google-вход = не узнать о чужом номере никогда.
+|
+| Единственное исключение из гейта, и оно правильное: здесь данные отдают,
+| а не забирают. Скрейпить нечего.
+*/
+
+Route::post('/numero/{listing}/denunciar', [ReportController::class, 'store'])
+    ->middleware('throttle:5,60')
+    ->name('listings.report');
+
+/*
+|--------------------------------------------------------------------------
 | Вход — только Google
 |--------------------------------------------------------------------------
 | Паролей нет: ни формы регистрации, ни восстановления.
@@ -70,4 +88,26 @@ Route::middleware('auth')->prefix('mis-anuncios')->name('seller.')->group(functi
     Route::post('/{listing}/reenviar', [OtpController::class, 'resend'])
         ->middleware('throttle:3,10')
         ->name('listings.otp.resend');
+
+    // Жизненный цикл: продано / снять.
+    Route::post('/{listing}/vendido', [ListingLifecycleController::class, 'markSold'])
+        ->name('listings.sold');
+    Route::post('/{listing}/archivar', [ListingLifecycleController::class, 'archive'])
+        ->name('listings.archive');
 });
+
+/*
+|--------------------------------------------------------------------------
+| Продление
+|--------------------------------------------------------------------------
+| ВНЕ группы 'auth' намеренно. Ссылка приходит письмом «объявление скоро
+| истечёт», и владение доказывает подпись Laravel, а не сессия. Заставлять
+| человека логиниться ради одной кнопки — гарантировать, что он этого
+| не сделает, и объявление умрёт не потому, что неактуально.
+|
+| Контроллер требует ЛИБО валидную подпись, ЛИБО владельца в сессии.
+*/
+
+Route::get('/mis-anuncios/{listing}/renovar', [ListingLifecycleController::class, 'renew'])
+    ->middleware('throttle:10,60')
+    ->name('seller.listings.renew');

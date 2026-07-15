@@ -22,6 +22,7 @@ class Listing extends Model
         'contact_name', 'contact_phone', 'contact_email', 'contact_whatsapp',
         'status', 'moderation_score', 'rejection_reason',
         'phone_verified_at', 'published_at', 'expires_at', 'slug',
+        'expiry_notified_at', 'renewals_count', 'sold_at',
     ];
 
     /**
@@ -46,8 +47,10 @@ class Listing extends Model
             'contact_whatsapp'  => 'boolean',
             'pattern_tags'      => 'array',
             'phone_verified_at' => 'datetime',
-            'published_at'      => 'datetime',
-            'expires_at'        => 'datetime',
+            'published_at'       => 'datetime',
+            'expires_at'         => 'datetime',
+            'expiry_notified_at' => 'datetime',
+            'sold_at'            => 'datetime',
         ];
     }
 

@@ -63,49 +63,87 @@ class ListingFactory extends Factory
     }
 
     // ---- Состояния для «красивых» номеров: нужны, чтобы было что искать ----
+    //
+    // Генерация номера и state разделены намеренно. Метод-состояние (repetido
+    // и т.д.) отдаёт factory, готовый создать одну строку. Метод-генератор
+    // (genRepetido и т.д.) — чистая функция «дай ещё один такой номер»: сидер
+    // зовёт её в цикле, чтобы набрать уникальный набор msisdn, потому что
+    // active_msisdn — UNIQUE, и два одинаковых активных номера падают на вставке.
 
     /** 666666666 */
     public function repetido(): static
     {
-        return $this->withMsisdn(fn () => str_repeat((string) $this->faker->randomElement([6, 7]), 9));
+        return $this->withMsisdn(fn () => $this->genRepetido());
     }
 
     /** Палиндром: 612 3 4 3 216 */
     public function capicua(): static
     {
-        return $this->withMsisdn(function () {
-            $head = $this->faker->randomElement(['6', '7']).$this->faker->numerify('###');
-            $mid  = (string) $this->faker->numberBetween(0, 9);
-
-            return $head.$mid.strrev($head);
-        });
+        return $this->withMsisdn(fn () => $this->genCapicua());
     }
 
     /** 612345678 / 698765432 */
     public function escalera(): static
     {
-        return $this->withMsisdn(function () {
-            $start = $this->faker->numberBetween(1, 2);
-            $n = $this->faker->randomElement(['6', '7']);
-
-            for ($i = 0; $i < 8; $i++) {
-                $n .= ($start + $i) % 10;
-            }
-
-            return $n;
-        });
+        return $this->withMsisdn(fn () => $this->genEscalera());
     }
 
     /** Хвост из четырёх одинаковых: 61234 7777 */
     public function terminacion(): static
     {
-        return $this->withMsisdn(fn () => $this->faker->randomElement(['6', '7'])
+        return $this->withMsisdn(fn () => $this->genTerminacion());
+    }
+
+    /**
+     * Все девять цифр одинаковы — по строгому правилу PatternTagger это
+     * ровно два валидных номера (6 и 7), больше «repetido» не существует.
+     */
+    public function genRepetido(): string
+    {
+        return str_repeat((string) $this->faker->randomElement([6, 7]), 9);
+    }
+
+    /** Палиндром: 6/7 + 3 цифры + средняя + зеркало. ~20 000 вариантов. */
+    public function genCapicua(): string
+    {
+        $head = $this->faker->randomElement(['6', '7']).$this->faker->numerify('###');
+        $mid  = (string) $this->faker->numberBetween(0, 9);
+
+        return $head.$mid.strrev($head);
+    }
+
+    /**
+     * Лестница: гарантированный подряд-возрастающий прогон длиной 6 (порог
+     * тега — 6, см. PatternTagger::isEscalera), поставленный со сдвигом в
+     * хвост из 8 цифр, остальное — случайные цифры. Прежний вариант давал
+     * всего 4 разных номера и не набирал 10 уникальных активных строк.
+     */
+    public function genEscalera(): string
+    {
+        $prefix = $this->faker->randomElement(['6', '7']);
+        $start  = $this->faker->numberBetween(0, 4);  // start..start+5 влезает в 0..9
+        $offset = $this->faker->numberBetween(0, 2);  // прогон длиной 6 внутри 8 цифр
+
+        $tail = [];
+        for ($i = 0; $i < 8; $i++) {
+            $tail[] = ($i >= $offset && $i < $offset + 6)
+                ? (string) ($start + ($i - $offset))
+                : (string) $this->faker->numberBetween(0, 9);
+        }
+
+        return $prefix.implode('', $tail);
+    }
+
+    /** Хвост из четырёх одинаковых: 61234 7777. ~200 000 вариантов. */
+    public function genTerminacion(): string
+    {
+        return $this->faker->randomElement(['6', '7'])
             .$this->faker->numerify('####')
-            .str_repeat((string) $this->faker->numberBetween(0, 9), 4));
+            .str_repeat((string) $this->faker->numberBetween(0, 9), 4);
     }
 
     /** Общий помощник: подставить номер и пересчитать теги и slug. */
-    private function withMsisdn(callable $gen): static
+    public function withMsisdn(callable $gen): static
     {
         return $this->state(function () use ($gen) {
             $m = $gen();

@@ -20,7 +20,7 @@
 иначе `php` продолжит указывать на него.
 
 ```bash
-brew install php@8.3 composer mysql@8.0
+NONINTERACTIVE=1 brew install php@8.3 composer mysql@8.0
 
 # Убрать с дороги другую версию PHP, если она была слинкована
 brew unlink php 2>/dev/null

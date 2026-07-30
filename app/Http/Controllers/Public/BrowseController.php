@@ -32,9 +32,15 @@ class BrowseController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
+        // Провинции сортируем по колонке ТЕКУЩЕЙ локали, а не всегда по name_es:
+        // список выводится через localizedName(), и в EN порядок по испанским
+        // именам выглядел бы как случайный. Локали без своей колонки — на name_es.
+        $locale = app()->getLocale();
+        $nameCol = in_array($locale, ['es', 'en', 'ca', 'gl', 'eu'], true) ? "name_{$locale}" : 'name_es';
+
         return view('browse.index', [
             'listings'  => $listings,
-            'provinces' => Province::orderBy('name_es')->get(),
+            'provinces' => Province::orderBy($nameCol)->get(),
             'tags'      => PatternTagger::TAGS,
 
             // Отдаём во вью уже санитизированным: то, что пользователь

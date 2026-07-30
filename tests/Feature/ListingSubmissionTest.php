@@ -94,6 +94,18 @@ class ListingSubmissionTest extends TestCase
     // -----------------------------------------------------------------
 
     #[Test]
+    public function the_submission_form_renders_for_a_seller(): void
+    {
+        // Форму подачи не рендерил ни один тест — а именно там легко словить
+        // Blade-ошибку правкой вёрстки. Проверяем 200 + новые группы/OTP-note.
+        $this->actingAs(User::factory()->create())
+            ->get(route('seller.listings.create'))
+            ->assertOk()
+            ->assertSee(__('listing.groups.number_price'))
+            ->assertSee(__('listing.help.msisdn_otp'));
+    }
+
+    #[Test]
     public function a_submitted_listing_lands_in_pending_not_active(): void
     {
         $user = User::factory()->create(['seller_type' => null]);

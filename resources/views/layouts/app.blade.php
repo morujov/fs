@@ -9,8 +9,10 @@
     <title>@yield('title', config('app.name'))</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="bg-gray-50 text-gray-900">
-    <header class="border-b bg-white">
+<body class="text-ink">
+    <x-bg-pattern />
+
+    <header class="border-b border-line bg-surface">
         <div class="mx-auto flex max-w-4xl items-center justify-between p-4">
             <a href="{{ route('home') }}" class="font-semibold">{{ config('app.name') }}</a>
 
@@ -19,15 +21,16 @@
 
                 @auth
                     <div class="flex items-center gap-4 text-sm">
-                        <a href="{{ route('seller.listings.index') }}">{{ __('listing.my_listings') }}</a>
-                        <a href="{{ route('account.privacy.show') }}">{{ __('gdpr.title') }}</a>
+                        <a href="{{ route('seller.listings.index') }}" class="hover:text-accent">{{ __('listing.my_listings') }}</a>
+                        <a href="{{ route('account.privacy.show') }}" class="hover:text-accent">{{ __('gdpr.title') }}</a>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
-                            <button type="submit">{{ __('auth.sign_out') }}</button>
+                            <button type="submit" class="hover:text-accent">{{ __('auth.sign_out') }}</button>
                         </form>
                     </div>
                 @else
-                    <a href="{{ route('auth.google.redirect') }}" class="rounded bg-gray-900 px-4 py-2 text-sm text-white">
+                    <a href="{{ route('auth.google.redirect') }}"
+                       class="rounded-md bg-selected px-4 py-2 text-sm text-selected-ink">
                         {{ __('auth.sign_in_with_google') }}
                     </a>
                 @endauth

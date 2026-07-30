@@ -7,3 +7,97 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+
+/*
+ * Дизайн-токены.
+ *
+ * Один акцент — латунь/золото: номер здесь «красивый товар», и золото несёт
+ * ровно этот смысл (ценность/красота), а не украшает всё подряд. Остальное —
+ * холодная нейтраль-бумага. Тёмная тема пока НЕ вводится: половина макета
+ * (шапка/фон) ещё на хардкоде, полутёмная тема была бы хуже её отсутствия —
+ * отдельная задача. Примитивы — в :root, семантика — в @theme inline (тогда
+ * работают утилиты bg-surface / text-ink / text-accent / border-line и т.п.).
+ */
+:root {
+    --c-surface:        #ffffff;   /* карточки, шапка */
+    --c-surface-2:      #f7f7f6;   /* фон страницы */
+    --c-sunken:         #f2f1ef;   /* поле маски контакта, sunken-блоки */
+    --c-ink:            #1a1a17;   /* основной текст */
+    --c-ink-muted:      #5b5b54;   /* вторичный текст */
+    --c-ink-subtle:     #8a8a80;   /* мета, подписи */
+    --c-line:           #e6e4df;   /* обычные бордеры */
+    --c-line-strong:    #cfcbc2;   /* hover-бордер, разделители */
+
+    --c-accent:         #9a7b2e;   /* латунь — «красота/ценность» */
+    --c-accent-strong:  #7d6222;   /* hover/active акцента */
+    --c-accent-weak:    #f6efdd;   /* заливка паттерн-чипа/выбранного */
+    --c-accent-ink:     #ffffff;
+
+    --c-product-ink:    #14140f;   /* номер — темнее корпуса текста */
+
+    --c-shop-bg:        #eef2f7;
+    --c-shop-ink:       #33506e;
+
+    --c-danger:         #a3341f;   /* ошибки/валидность */
+
+    --c-selected:       #1a1a17;   /* сплошная тёмная — действие/выбор */
+    --c-selected-ink:   #ffffff;
+    --c-ring:           #9a7b2e;
+
+    --radius-md:        12px;
+}
+
+@theme inline {
+    --color-surface:       var(--c-surface);
+    --color-surface-2:     var(--c-surface-2);
+    --color-sunken:        var(--c-sunken);
+    --color-ink:           var(--c-ink);
+    --color-ink-muted:     var(--c-ink-muted);
+    --color-ink-subtle:    var(--c-ink-subtle);
+    --color-line:          var(--c-line);
+    --color-line-strong:   var(--c-line-strong);
+    --color-accent:        var(--c-accent);
+    --color-accent-strong: var(--c-accent-strong);
+    --color-accent-weak:   var(--c-accent-weak);
+    --color-product:       var(--c-product-ink);
+    --color-shop-bg:       var(--c-shop-bg);
+    --color-shop-ink:      var(--c-shop-ink);
+    --color-danger:        var(--c-danger);
+    --color-selected:      var(--c-selected);
+    --color-selected-ink:  var(--c-selected-ink);
+}
+
+/* Фокус-кольцо по клавиатуре на всех интерактивах — единый и заметный. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--c-ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/*
+ * Контекстный фон (компонент x-bg-pattern): тихая «телефонная сетка» с
+ * призрачными цифрами-лесенкой. Живёт под всем контентом (z-10 внизу),
+ * не ловит клики, и гаснет к низу страницы — чтобы не мешать читаемости
+ * списка карточек. Никакого движения (статичен), так что prefers-reduced-
+ * motion не нужен. Базовый цвет страницы держим на html, чтобы отрицательный
+ * z-index слоя был виден.
+ */
+html {
+    background-color: var(--c-surface-2);
+}
+
+.bg-figure {
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    pointer-events: none;
+    /* Плотный сверху, растворяется к ~60% высоты вьюпорта. */
+    -webkit-mask-image: linear-gradient(180deg, #000 0, #000 24%, transparent 60%);
+            mask-image: linear-gradient(180deg, #000 0, #000 24%, transparent 60%);
+}
+
+.bg-figure svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}

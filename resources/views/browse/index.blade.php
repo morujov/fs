@@ -36,7 +36,9 @@
             <div>
                 <label class="sr-only" for="province">{{ __('browse.province') }}</label>
                 @php $selProvince = array_map('strval', (array) ($filters['province'] ?? [])); @endphp
-                <select name="province" id="province"
+                <select name="province" id="province" data-combobox
+                        data-placeholder="{{ __('browse.province_search') }}"
+                        data-nomatch="{{ __('browse.province_none') }}"
                         class="min-h-11 w-full rounded-md border border-line bg-surface p-2">
                     <option value="">{{ __('browse.province') }}: {{ __('browse.any') }}</option>
                     @foreach ($provinces as $province)

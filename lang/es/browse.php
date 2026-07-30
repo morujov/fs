@@ -25,6 +25,8 @@ return [
     'seller'   => 'Vendedor',
     'category' => 'Categoría',
     'categories' => 'Categorías',
+    'province_search' => 'Escribe una provincia…',
+    'province_none'   => 'Sin coincidencias',
 
     'sort'     => 'Ordenar',
     'sorts' => [

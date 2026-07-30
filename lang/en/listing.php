@@ -53,11 +53,21 @@ return [
 
     'help' => [
         'msisdn'        => 'The number you are selling. 9 digits, as you would dial it.',
+        'msisdn_otp'    => 'We will send an SMS code to this number to confirm it is yours.',
         'condition_new' => 'New: never activated.',
         'condition_used'=> 'Used: has been in use.',
         'contact_phone' => 'Your phone so buyers can reach you. Not the number you are selling. It stays hidden until the buyer signs in with Google.',
         'permanency'    => 'Whether the line has a contract commitment with the operator.',
         'negotiable'    => 'Tick this if you prefer to negotiate the price.',
+    ],
+
+    // Submission form group headings.
+    'groups' => [
+        'number_price' => 'Number and price',
+        'line'         => 'The line',
+        'location'     => 'Location',
+        'contact'      => 'Contact',
+        'seller'       => 'About you',
     ],
 
     'conditions' => [

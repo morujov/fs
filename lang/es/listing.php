@@ -57,11 +57,21 @@ return [
     // для номера двусмысленно (пробел №12 блюпринта).
     'help' => [
         'msisdn'        => 'El número que vendes. 9 dígitos, tal y como lo marcarías.',
+        'msisdn_otp'    => 'Te enviaremos un SMS con un código a este número para confirmar que es tuyo.',
         'condition_new' => 'Nuevo: nunca se ha activado.',
         'condition_used'=> 'Usado: ha estado en uso.',
         'contact_phone' => 'Tu teléfono para que te contacten. No es el número que vendes. Se muestra oculto hasta que el comprador entra con Google.',
         'permanency'    => 'Si la línea tiene compromiso de permanencia con el operador.',
         'negotiable'    => 'Marca esta casilla si prefieres negociar el precio.',
+    ],
+
+    // Заголовки групп формы подачи.
+    'groups' => [
+        'number_price' => 'Número y precio',
+        'line'         => 'La línea',
+        'location'     => 'Ubicación',
+        'contact'      => 'Contacto',
+        'seller'       => 'Sobre ti',
     ],
 
     'conditions' => [

@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Models\Listing;
-use App\Models\Operator;
 use App\Models\Province;
 use App\Models\Setting;
 use App\Services\Search\ListingQuery;
@@ -36,7 +35,6 @@ class BrowseController extends Controller
         return view('browse.index', [
             'listings'  => $listings,
             'provinces' => Province::orderBy('name_es')->get(),
-            'operators' => Operator::active()->get(),
             'tags'      => PatternTagger::TAGS,
 
             // Отдаём во вью уже санитизированным: то, что пользователь

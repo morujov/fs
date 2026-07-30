@@ -27,16 +27,6 @@
                 @endforeach
             </select>
 
-            <select name="operator[]" class="rounded border p-2">
-                <option value="">{{ __('browse.operator') }}: {{ __('browse.any') }}</option>
-                @foreach ($operators as $operator)
-                    <option value="{{ $operator->id }}"
-                        @selected(in_array((string) $operator->id, (array) ($filters['operator'] ?? []), true))>
-                        {{ $operator->name }}
-                    </option>
-                @endforeach
-            </select>
-
             <input type="number" name="price_min" value="{{ $filters['price_min'] ?? '' }}"
                    placeholder="{{ __('browse.price_from') }}" class="rounded border p-2">
             <input type="number" name="price_max" value="{{ $filters['price_max'] ?? '' }}"
@@ -49,21 +39,6 @@
                         {{ __('listing.conditions.'.$condition) }}
                     </option>
                 @endforeach
-            </select>
-
-            <select name="line_type" class="rounded border p-2">
-                <option value="">{{ __('browse.line_type') }}: {{ __('browse.any') }}</option>
-                @foreach (['prepago', 'contrato'] as $type)
-                    <option value="{{ $type }}" @selected(($filters['line_type'] ?? null) === $type)>
-                        {{ __('listing.line_types.'.$type) }}
-                    </option>
-                @endforeach
-            </select>
-
-            <select name="permanency" class="rounded border p-2">
-                <option value="">{{ __('browse.permanency') }}: {{ __('browse.any') }}</option>
-                <option value="libre" @selected(($filters['permanency'] ?? null) === 'libre')>{{ __('browse.permanency_libre') }}</option>
-                <option value="con" @selected(($filters['permanency'] ?? null) === 'con')>{{ __('browse.permanency_con') }}</option>
             </select>
 
             <select name="sort" class="rounded border p-2">

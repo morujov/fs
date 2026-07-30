@@ -24,6 +24,7 @@ return [
     'permanency_con'   => 'With commitment',
     'seller'   => 'Seller',
     'category' => 'Category',
+    'categories' => 'Categories',
 
     'sort'     => 'Sort',
     'sorts' => [

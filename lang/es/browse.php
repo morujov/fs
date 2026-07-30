@@ -24,6 +24,7 @@ return [
     'permanency_con'   => 'Con permanencia',
     'seller'   => 'Vendedor',
     'category' => 'Categoría',
+    'categories' => 'Categorías',
 
     'sort'     => 'Ordenar',
     'sorts' => [

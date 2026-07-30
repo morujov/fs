@@ -17,6 +17,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // исходный URL фреймворк сам кладёт в `url.intended` (redirect()->guest),
         // и callback вернёт туда через redirect()->intended().
         $middleware->redirectGuestsTo(fn () => route('auth.google.redirect'));
+
+        // Локаль применяется после StartSession (нужна сессия) и умеет читать
+        // профиль вошедшего. Ставим в конец web-группы.
+        $middleware->web(append: [
+            \App\Http\Middleware\SetLocale::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

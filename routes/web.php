@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Account\PrivacyController;
 use App\Http\Controllers\Auth\GoogleAuthController;
+use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Public\BrowseController;
 use App\Http\Controllers\Public\ContactRevealController;
 use App\Http\Controllers\Public\ReportController;
@@ -22,6 +23,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', [BrowseController::class, 'index'])->name('home');
 Route::get('/numero/{listing}', [BrowseController::class, 'show'])->name('listings.show');
+
+// Переключение языка интерфейса. Открыто всем (аноним тоже выбирает язык);
+// сам выбор идёт в сессию, вошедшему — ещё и в профиль.
+Route::get('/idioma/{locale}', [LocaleController::class, 'switch'])->name('locale.switch');
 
 /*
 |--------------------------------------------------------------------------

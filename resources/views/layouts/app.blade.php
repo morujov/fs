@@ -17,6 +17,7 @@
             @auth
                 <div class="flex items-center gap-4 text-sm">
                     <a href="{{ route('seller.listings.index') }}">{{ __('listing.my_listings') }}</a>
+                    <a href="{{ route('account.privacy.show') }}">{{ __('gdpr.title') }}</a>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit">{{ __('auth.sign_out') }}</button>

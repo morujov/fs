@@ -39,6 +39,20 @@ class SettingSeeder extends Seeder
             ['moderation.otp_max_sends',    '3',  'int',  'moderation', 'Макс. SMS на одно объявление (защита от накрутки счёта)'],
             ['moderation.otp_max_attempts', '5',  'int',  'moderation', 'Макс. попыток ввода кода'],
 
+
+            // --- Сроки хранения (GDPR, ст. 5 — ограничение хранения) ---
+            //
+            // Персональные данные нельзя держать «на всякий случай». Каждый
+            // срок ниже обоснован конкретной целью; когда цель отпадает,
+            // данные обязаны уйти. Это не перестраховка — это то, за что
+            // AEPD штрафует.
+            ['retention.reveal_ip_days',      '90',  'int', 'retention', 'Через сколько дней обезличить IP и user-agent в логе раскрытий. Сама строка остаётся: она нужна, чтобы повторное раскрытие не тратило лимит'],
+            ['retention.report_ip_days',      '180', 'int', 'retention', 'Через сколько дней после закрытия жалобы обезличить IP заявителя'],
+            ['retention.moderation_log_days', '365', 'int', 'retention', 'Сколько хранить логи модерации: в payload попадают куски описаний'],
+            ['retention.otp_days',            '30',  'int', 'retention', 'Сколько хранить использованные и протухшие OTP-коды'],
+            ['retention.audit_ip_days',       '365', 'int', 'retention', 'Через сколько дней обезличить IP в аудите действий админов'],
+            ['retention.sold_listing_days',   '365', 'int', 'retention', 'Через сколько дней после продажи обезличить контакты в объявлении'],
+
             // --- Фича-флаги ---
             ['features.payments_enabled', 'false', 'bool', 'features', 'Платёжный гейт. Выключен: монетизации нет'],
             ['features.shops_enabled',    'true',  'bool', 'features', 'Регистрация магазинов'],

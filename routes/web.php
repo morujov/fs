@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Account\PrivacyController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\Public\BrowseController;
 use App\Http\Controllers\Public\ContactRevealController;
@@ -65,6 +66,20 @@ Route::controller(GoogleAuthController::class)->group(function () {
     Route::get('/auth/google/redirect', 'redirect')->name('auth.google.redirect');
     Route::get('/auth/google/callback', 'callback')->name('auth.google.callback');
     Route::post('/logout', 'logout')->middleware('auth')->name('logout');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Права субъекта данных — GDPR ст. 15 и 17
+|--------------------------------------------------------------------------
+| Не фича, а обязанность. Право, которым можно воспользоваться только
+| написав письмо и подождав месяц, — это право на бумаге.
+*/
+
+Route::middleware('auth')->prefix('mis-datos')->name('account.privacy.')->group(function () {
+    Route::get('/', [PrivacyController::class, 'show'])->name('show');
+    Route::get('/exportar', [PrivacyController::class, 'export'])->middleware('throttle:5,60')->name('export');
+    Route::delete('/', [PrivacyController::class, 'destroy'])->name('destroy');
 });
 
 /*

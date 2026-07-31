@@ -57,7 +57,9 @@ class StoreListingRequest extends FormRequest
             ],
 
             // --- Характеристики линии ---
-            'operator_id'   => ['required', 'exists:operators,id'],
+            // Оператор больше не спрашиваем: покупателю для оценки номера он не
+            // нужен, продавцу — лишнее поле. Колонка operator_id остаётся
+            // nullable в БД (и в админке), просто не собирается через форму.
             'line_type'     => ['required', Rule::in(['prepago', 'contrato'])],
             'has_permanency' => ['boolean'],
             'permanency_until' => [

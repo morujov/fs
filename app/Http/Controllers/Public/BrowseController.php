@@ -64,7 +64,7 @@ class BrowseController extends Controller
         $listing->increment('views');
 
         return view('browse.show', [
-            'listing' => $listing->load(['province', 'operator', 'shop']),
+            'listing' => $listing->load(['province', 'shop']),
 
             // В HTML уходит ТОЛЬКО маска. Полное значение отдаёт
             // ContactRevealController после проверки сессии и лимитов.

@@ -30,7 +30,6 @@
     </div>
 
     <div class="mt-2 text-sm text-ink-subtle">
-        {{ $listing->operator?->name }} ·
         {{ $listing->province?->localizedName() }} ·
         {{ __('listing.conditions.'.$listing->condition) }}
     </div>

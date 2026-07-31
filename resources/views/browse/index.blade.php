@@ -9,8 +9,9 @@
              в поле не может вернуться ничего, кроме цифр и '?'. --}}
         <div>
             <label class="mb-1 block text-sm font-medium text-ink" for="q">{{ __('browse.search') }}</label>
-            <input type="text" name="q" id="q" value="{{ $pattern }}"
+            <input type="text" name="q" id="q" value="{{ $pattern }}" data-digit-cells
                    inputmode="numeric" maxlength="9" autocomplete="off" placeholder="6??12??34"
+                   aria-label="{{ __('browse.search') }}"
                    class="w-full rounded-md border border-line bg-surface p-3 font-mono text-lg tracking-widest">
             <p class="mt-1 text-xs text-ink-subtle">{{ __('browse.search_help') }}</p>
         </div>

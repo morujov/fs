@@ -30,11 +30,10 @@ final class ListingQuery
         $q = Listing::query()
             // Единственная точка, где решается видимость. Не выносить.
             ->active()
-            ->with(['province', 'operator', 'shop']);
+            ->with(['province', 'shop']);
 
         $this->applyPattern($q, $params);
         $this->applyProvinces($q, $params);
-        $this->applyOperators($q, $params);
         $this->applyPrice($q, $params);
         $this->applyEnums($q, $params);
         $this->applyTags($q, $params);
@@ -60,15 +59,6 @@ final class ListingQuery
 
         if ($ids !== []) {
             $q->whereIn('province_id', $ids);
-        }
-    }
-
-    private function applyOperators(Builder $q, array $p): void
-    {
-        $ids = $this->ids($p['operator'] ?? null);
-
-        if ($ids !== []) {
-            $q->whereIn('operator_id', $ids);
         }
     }
 

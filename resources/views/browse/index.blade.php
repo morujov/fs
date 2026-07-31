@@ -88,7 +88,7 @@
                 {{ __('browse.reset') }}
             </a>
 
-            <div class="ml-auto flex items-center gap-2">
+            <div class="flex w-full items-center justify-between gap-2 sm:ml-auto sm:w-auto sm:justify-end">
                 <label class="text-sm text-ink-subtle" for="sort">{{ __('browse.sort') }}</label>
                 <select name="sort" id="sort" class="min-h-11 rounded-md border border-line bg-surface p-2 text-sm">
                     @foreach (['newest', 'price_asc', 'price_desc'] as $sort)

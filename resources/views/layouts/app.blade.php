@@ -13,10 +13,10 @@
     <x-bg-pattern />
 
     <header class="border-b border-line bg-surface">
-        <div class="mx-auto flex max-w-4xl items-center justify-between p-4">
+        <div class="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-x-4 gap-y-2 p-4">
             <a href="{{ route('home') }}" class="font-semibold">{{ config('app.name') }}</a>
 
-            <div class="flex items-center gap-4">
+            <div class="flex items-center gap-3 sm:gap-4">
                 <x-locale-switcher />
 
                 @auth

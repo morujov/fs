@@ -86,9 +86,17 @@ html {
     background-color: var(--c-surface-2);
 }
 
+/* Витрина никогда не должна ехать вбок: декоративный фон и краевые пиксели
+   не создают горизонтальный скролл. Вертикальный не трогаем. */
+body {
+    overflow-x: clip;
+}
+
 .bg-figure {
     position: fixed;
     inset: 0;
+    max-width: 100vw;
+    overflow: hidden;
     z-index: -10;
     pointer-events: none;
     /* Плотный сверху, растворяется к ~60% высоты вьюпорта. */

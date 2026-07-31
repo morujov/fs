@@ -166,6 +166,28 @@ html {
     gap: 6px;
 }
 
+/* На узких экранах ужимаем зазор, чтобы 9 ячеек не давили друг на друга
+   и ряд не вылезал за край. */
+@media (max-width: 400px) {
+    .digit-cells {
+        gap: 4px;
+    }
+}
+
+/*
+ * iOS Safari авто-зумит страницу при фокусе на любом input/select/textarea
+ * с font-size < 16px — раздражает, и это главный мобильный дефект. Держим
+ * все контролы форм на мобиле ≥16px. .digit-cell исключён (у него свой 20px),
+ * чекбоксы/радио скрыты и не в счёт.
+ */
+@media (max-width: 640px) {
+    input:not(.digit-cell):not([type='checkbox']):not([type='radio']),
+    select,
+    textarea {
+        font-size: 16px;
+    }
+}
+
 .digit-cells-native {
     position: absolute;
     width: 1px;

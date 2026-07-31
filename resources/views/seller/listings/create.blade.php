@@ -105,7 +105,10 @@
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label class="mb-1 block text-sm font-medium text-ink" for="province_id">{{ __('listing.attributes.province_id') }}</label>
-                    <select name="province_id" id="province_id" class="min-h-11 w-full rounded-md border border-line bg-surface p-2">
+                    <select name="province_id" id="province_id" data-combobox
+                            data-placeholder="{{ __('browse.province_search') }}"
+                            data-nomatch="{{ __('browse.province_none') }}"
+                            class="min-h-11 w-full rounded-md border border-line bg-surface p-2">
                         @foreach ($provinces as $province)
                             <option value="{{ $province->id }}" @selected(old('province_id') == $province->id)>
                                 {{ $province->localizedName() }}

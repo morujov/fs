@@ -25,6 +25,8 @@ return [
     'seller'   => 'Seller',
     'category' => 'Category',
     'categories' => 'Categories',
+    'province_search' => 'Type a province…',
+    'province_none'   => 'No matches',
 
     'sort'     => 'Sort',
     'sorts' => [

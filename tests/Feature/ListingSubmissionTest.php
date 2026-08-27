@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Listing;
-use App\Models\Operator;
 use App\Models\Province;
 use App\Models\User;
 use App\Services\Sms\SmsSenderInterface;
@@ -49,7 +48,6 @@ class ListingSubmissionTest extends TestCase
             'msisdn'        => '612345678',
             'price'         => 250,
             'is_negotiable' => false,
-            'operator_id'   => Operator::first()->id,
             'line_type'     => 'prepago',
             'has_permanency' => false,
             'condition'     => 'used',

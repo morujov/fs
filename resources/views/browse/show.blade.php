@@ -28,8 +28,6 @@
         </div>
 
         <dl class="mt-5 grid gap-2 text-sm sm:grid-cols-2">
-            <div><dt class="inline text-ink-subtle">{{ __('listing.attributes.operator_id') }}:</dt>
-                 <dd class="inline text-ink">{{ $listing->operator?->name }}</dd></div>
             <div><dt class="inline text-ink-subtle">{{ __('listing.attributes.line_type') }}:</dt>
                  <dd class="inline text-ink">{{ __('listing.line_types.'.$listing->line_type) }}</dd></div>
             <div><dt class="inline text-ink-subtle">{{ __('listing.attributes.condition') }}:</dt>

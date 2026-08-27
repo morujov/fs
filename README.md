@@ -5,6 +5,19 @@
 
 Полное ТЗ и архитектурные решения — в `BLUEPRINT-numeros-es.md`.
 
+**Документы проекта:**
+
+| Файл | О чём |
+|---|---|
+| `CLAUDE.md` | инварианты и правила — что нельзя ломать |
+| `RUNBOOK.md` | **эксплуатация**: доступы, выкат, база, тесты, разбор поломок |
+| `AUDIT-2026-08-27.md` | состояние после переноса на сервер клиента, открытые пункты |
+| `BLUEPRINT-numeros-es.md` | ТЗ и обоснования решений (не редактировать) |
+| `STATUS-2026-07-31.md` | снимок проекта на конец июля |
+
+**Тестовый стенд:** http://test.numerofacil.es (Basic Auth `cliente`,
+пароль — в `RUNBOOK.md`). Живёт на сервере клиента, MySQL 8, данные демо.
+
 **Стек:** Laravel 13 · PHP 8.3 · MySQL · Blade + Alpine + Tailwind 4
 **Авторизация:** только Google Sign-In. Паролей в системе нет.
 
@@ -161,6 +174,36 @@ curl -I https://<домен>/test/.env    # ← обязан вернуть 403 
 
 Если `.env` отдался — стоп, деплой переделывается. Полный чек-лист
 в блюпринте, раздел 8.
+
+---
+
+## Временный демо-стенд (DigitalOcean)
+
+Для показа клиенту поднимался **временный** публичный демо — отдельно от
+Bluehost. Схема (та же дисциплина «собираем локально, на хост едет тарбол»):
+
+```bash
+# локально
+npm run build && composer install   # public/build + vendor уже в дереве
+tar -czf demo.tar.gz --exclude=.git --exclude=node_modules --exclude=.env .
+scp demo.tar.gz root@<droplet>:/tmp/
+
+# на дроплете
+tar -xzf /tmp/demo.tar.gz -C /opt/numeros-es
+# отдельная БД + юзер, .env заполнить руками (APP_ENV=production)
+php artisan key:generate --force
+php artisan migrate --seed --force
+# демо-данные в production пропускаются DatabaseSeeder — сеять явно:
+APP_ENV=local php artisan db:seed --class="Database\Seeders\DemoListingSeeder" --force
+chown -R www-data:www-data storage bootstrap/cache
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+```
+
+Демо закрывается **Basic Auth + `X-Robots-Tag: noindex`**, отдельным nginx
+server-block. Если дроплет делит хост с другим боевым сайтом — обязательно
+**отдельная БД/юзер, изолированный nginx-блок, swap как подушка от OOM**, и
+готовый teardown-скрипт: снять сайт, дропнуть БД, убрать файлы и временный
+SSH-ключ. Актуальный адрес и доступ демо — в `STATUS-*.md`.
 
 ---
 

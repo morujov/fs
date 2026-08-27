@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Models\Listing;
-use App\Models\Operator;
 use App\Models\Province;
 use App\Models\User;
 use Database\Seeders\NumberingRangeSeeder;
@@ -177,21 +176,6 @@ class BrowseTest extends TestCase
         $this->listing(['msisdn' => '698765432', 'province_id' => $barcelona->id]);
 
         $this->get(route('home', ['province' => [$madrid->id]]))
-            ->assertOk()
-            ->assertSee('612 34 56 78')
-            ->assertDontSee('698 76 54 32');
-    }
-
-    #[Test]
-    public function filtering_by_operator_works(): void
-    {
-        $movistar = Operator::where('slug', 'movistar')->first();
-        $vodafone = Operator::where('slug', 'vodafone')->first();
-
-        $this->listing(['msisdn' => '612345678', 'operator_id' => $movistar->id]);
-        $this->listing(['msisdn' => '698765432', 'operator_id' => $vodafone->id]);
-
-        $this->get(route('home', ['operator' => [$movistar->id]]))
             ->assertOk()
             ->assertSee('612 34 56 78')
             ->assertDontSee('698 76 54 32');

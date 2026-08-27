@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Seller;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreListingRequest;
 use App\Models\Listing;
-use App\Models\Operator;
 use App\Models\Province;
 use App\Models\Setting;
 use App\Services\Moderation\ModerationPipeline;
@@ -34,7 +33,7 @@ class ListingController extends Controller
     public function index(Request $request): View
     {
         $listings = $request->user()->listings()
-            ->with(['province', 'operator'])
+            ->with(['province'])
             ->latest()
             ->paginate(20);
 
@@ -45,7 +44,6 @@ class ListingController extends Controller
     {
         return view('seller.listings.create', [
             'provinces' => Province::orderBy('name_es')->get(),
-            'operators' => Operator::active()->get(),
             'priceMin'  => (int) Setting::get('listing.price_min', 1),
             'priceMax'  => (int) Setting::get('listing.price_max', 50000),
         ]);
@@ -81,7 +79,6 @@ class ListingController extends Controller
                 'price'         => $data['is_negotiable'] ?? false ? null : $data['price'],
                 'is_negotiable' => $data['is_negotiable'] ?? false,
 
-                'operator_id'      => $data['operator_id'],
                 'line_type'        => $data['line_type'],
                 'has_permanency'   => $data['has_permanency'] ?? false,
                 'permanency_until' => $data['has_permanency'] ?? false ? $data['permanency_until'] : null,

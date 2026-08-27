@@ -9,8 +9,9 @@
              в поле не может вернуться ничего, кроме цифр и '?'. --}}
         <div>
             <label class="mb-1 block text-sm font-medium text-ink" for="q">{{ __('browse.search') }}</label>
-            <input type="text" name="q" id="q" value="{{ $pattern }}"
+            <input type="text" name="q" id="q" value="{{ $pattern }}" data-digit-cells
                    inputmode="numeric" maxlength="9" autocomplete="off" placeholder="6??12??34"
+                   aria-label="{{ __('browse.search') }}"
                    class="w-full rounded-md border border-line bg-surface p-3 font-mono text-lg tracking-widest">
             <p class="mt-1 text-xs text-ink-subtle">{{ __('browse.search_help') }}</p>
         </div>
@@ -87,7 +88,7 @@
                 {{ __('browse.reset') }}
             </a>
 
-            <div class="ml-auto flex items-center gap-2">
+            <div class="flex w-full items-center justify-between gap-2 sm:ml-auto sm:w-auto sm:justify-end">
                 <label class="text-sm text-ink-subtle" for="sort">{{ __('browse.sort') }}</label>
                 <select name="sort" id="sort" class="min-h-11 rounded-md border border-line bg-surface p-2 text-sm">
                     @foreach (['newest', 'price_asc', 'price_desc'] as $sort)

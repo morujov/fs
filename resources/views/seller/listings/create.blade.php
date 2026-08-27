@@ -43,33 +43,20 @@
             </div>
         </fieldset>
 
-        {{-- Группа: линия — оператор, тип, состояние, permanencia. --}}
+        {{-- Группа: линия — тип, состояние, permanencia. Оператор больше не
+             спрашиваем: покупателю для оценки номера он не нужен. --}}
         <fieldset class="space-y-4 rounded-md border border-line bg-surface p-4">
             <legend class="px-1 text-sm font-semibold text-ink">{{ __('listing.groups.line') }}</legend>
 
-            <div class="grid gap-4 sm:grid-cols-2">
-                <div>
-                    <label class="mb-1 block text-sm font-medium text-ink" for="operator_id">{{ __('listing.attributes.operator_id') }}</label>
-                    <select name="operator_id" id="operator_id" class="min-h-11 w-full rounded-md border border-line bg-surface p-2">
-                        @foreach ($operators as $operator)
-                            <option value="{{ $operator->id }}" @selected(old('operator_id') == $operator->id)>
-                                {{ $operator->name }}@if ($operator->is_mvno) ({{ $operator->host_network }})@endif
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('operator_id') <p class="mt-1 text-sm text-danger">{{ $message }}</p> @enderror
-                </div>
-
-                <div>
-                    <label class="mb-1 block text-sm font-medium text-ink" for="line_type">{{ __('listing.attributes.line_type') }}</label>
-                    <select name="line_type" id="line_type" class="min-h-11 w-full rounded-md border border-line bg-surface p-2">
-                        @foreach (['prepago', 'contrato'] as $type)
-                            <option value="{{ $type }}" @selected(old('line_type') === $type)>
-                                {{ __('listing.line_types.'.$type) }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
+            <div>
+                <label class="mb-1 block text-sm font-medium text-ink" for="line_type">{{ __('listing.attributes.line_type') }}</label>
+                <select name="line_type" id="line_type" class="min-h-11 w-full rounded-md border border-line bg-surface p-2 sm:max-w-xs">
+                    @foreach (['prepago', 'contrato'] as $type)
+                        <option value="{{ $type }}" @selected(old('line_type') === $type)>
+                            {{ __('listing.line_types.'.$type) }}
+                        </option>
+                    @endforeach
+                </select>
             </div>
 
             {{-- Состояние — сегмент-пилюли (как на витрине). Подсказка одной строкой:

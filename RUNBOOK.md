@@ -31,8 +31,8 @@
 ```
 ~/Documents/numeros-es
 ```
-Git: `github.com/morujov/fs`. Актуальная ветка — `search-cells-remove-operator`
-(PR #13 открыт, в `main` ещё не влит).
+Git: `github.com/morujov/fs`. Рабочая ветка — **`main`**: PR #13 влит 27.08,
+открытых PR нет. Новую работу вести в отдельной ветке и вливать через PR.
 
 ### Тестовый сервер (клиента)
 | | |

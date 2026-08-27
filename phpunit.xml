@@ -45,8 +45,11 @@
         <env name="DB_HOST" value="127.0.0.1"/>
         <env name="DB_PORT" value="3306"/>
         <env name="DB_DATABASE" value="numeros_es_testing"/>
-        <env name="DB_USERNAME" value="root"/>
-        <env name="DB_PASSWORD" value=""/>
+        <!--
+            Логин и пароль НЕ прибиты здесь: они разные на разных машинах
+            (локально root с пустым паролем, на сервере отдельный юзер).
+            Берутся из .env — меняется только имя базы.
+        -->
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

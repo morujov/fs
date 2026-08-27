@@ -27,10 +27,39 @@ abstract class TestCase extends BaseTestCase
     {
         parent::setUp();
 
+        $this->guardAgainstNonTestingDatabase();
+
         Paginator::defaultView('pagination::tailwind');
         Paginator::defaultSimpleView('pagination::simple-tailwind');
         Paginator::currentPageResolver(fn (string $pageName = 'page') => (int) request()->input($pageName, 1));
 
         Cache::flush();
+    }
+
+    /**
+     * Предохранитель: тесты идут только по базе, чьё имя кончается на `_testing`.
+     *
+     * `RefreshDatabase` делает `migrate:fresh` — то есть дропает все таблицы.
+     * Если конфиг закэширован (`php artisan config:cache`, а на сервере он
+     * закэширован всегда), Laravel читает `bootstrap/cache/config.php` и
+     * НЕ смотрит на `<env>` из phpunit.xml: `DB_DATABASE=numeros_es_testing`
+     * молча игнорируется, и прогон уходит в боевую базу. Один `php artisan test`
+     * на сервере — и данные клиента снесены.
+     *
+     * Поэтому проверяем не переменную окружения, а фактическое имя базы,
+     * с которым подключилось приложение. Лечится `php artisan config:clear`.
+     */
+    private function guardAgainstNonTestingDatabase(): void
+    {
+        $connection = config('database.default');
+        $database = (string) config("database.connections.{$connection}.database");
+
+        if (! str_ends_with($database, '_testing')) {
+            throw new \RuntimeException(
+                "Тесты остановлены: подключение ведёт в базу «{$database}», а не в *_testing. "
+                .'Почти наверняка закэширован конфиг — выполни `php artisan config:clear`, '
+                .'прогони тесты и верни кэш через `php artisan config:cache`.'
+            );
+        }
     }
 }

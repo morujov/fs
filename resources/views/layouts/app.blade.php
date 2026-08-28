@@ -9,7 +9,7 @@
     <title>@yield('title', config('app.name'))</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
-<body class="text-ink">
+<body class="flex min-h-screen flex-col text-ink">
     <x-bg-pattern />
 
     <header class="border-b border-line bg-surface">
@@ -38,7 +38,7 @@
         </div>
     </header>
 
-    <main class="mx-auto max-w-4xl p-4">
+    <main class="mx-auto w-full max-w-4xl flex-1 p-4">
         @if (session('status'))
             <div class="mb-4 rounded bg-green-100 p-3 text-sm text-green-900">{{ session('status') }}</div>
         @endif
@@ -49,6 +49,18 @@
 
         @yield('content')
     </main>
+
+    {{-- Подпись разработчика. Одна на весь сайт: макет здесь единственный,
+         поэтому строка появляется на каждой странице сама, без правок вьюх.
+         Слева — в одной сетке с шапкой и контентом. --}}
+    <footer class="border-t border-line bg-surface">
+        <div class="mx-auto w-full max-w-4xl px-4 py-3 text-left text-xs text-ink-subtle">
+            {{ __('common.developed_by') }}
+            <a href="https://www.cac.az" target="_blank" rel="noopener noreferrer"
+               class="hover:text-accent">www.cac.az</a>
+        </div>
+    </footer>
+
     @stack('scripts')
 </body>
 </html>

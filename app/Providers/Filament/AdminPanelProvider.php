@@ -10,6 +10,7 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -58,6 +59,13 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+            // Подпись студии в подвале админки. У панели свой макет, поэтому
+            // футер из layouts/app.blade.php сюда не попадает — вешаем хуком,
+            // на тот же ключ перевода, чтобы строка правилась в одном месте.
+            ->renderHook(
+                PanelsRenderHook::FOOTER,
+                fn (): string => view('filament.studio-credit')->render(),
+            );
     }
 }
